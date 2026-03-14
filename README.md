@@ -54,7 +54,7 @@ Crea un archivo `.env` en la raíz del proyecto:
 ```env
 JWT_SECRET=cambia-esto-por-un-secreto-seguro
 CORS_ORIGINS=http://tu-servidor-ip:3000
-NEXT_PUBLIC_API_BASE_URL=http://tu-servidor-ip:8000
+API_BASE_URL=http://tu-servidor-ip:8000
 ```
 
 ### 3. Construir y levantar los contenedores
@@ -93,7 +93,7 @@ cd frontend
 npm install
 
 # Crear archivo de entorno local
-echo "NEXT_PUBLIC_API_BASE_URL=http://localhost:8000" > .env.local
+echo "API_BASE_URL=http://localhost:8000" > .env.local
 
 npm run dev
 ```
@@ -143,7 +143,7 @@ Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres provee
 
 | Variable | Por defecto | Descripción |
 |----------|-------------|-------------|
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | URL del backend |
+| `API_BASE_URL` | `http://localhost:8000` | URL del backend |
 
 ---
 
@@ -165,7 +165,7 @@ Después ve a **Docker → Add Container** y las plantillas aparecerán en el de
 
 Recuerda ajustar en cada plantilla:
 - **Backend:** `JWT_SECRET` por una cadena segura y `CORS_ORIGINS` por la URL de tu frontend
-- **Frontend:** `NEXT_PUBLIC_API_BASE_URL` por la IP y puerto de tu backend (ej: `http://192.168.1.100:8000`)
+- **Frontend:** `API_BASE_URL` por la IP y puerto de tu backend (ej: `http://192.168.1.100:8000`)
 
 ---
 

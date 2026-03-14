@@ -15,7 +15,7 @@ services:
     container_name: plex-trans-frontend
     image: unraiders/plex-trans:frontend
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     ports:
       - "3000:3000"
     depends_on:

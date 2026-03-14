@@ -28,7 +28,7 @@
   <Data/>
   <Environment>
     <Variable>
-      <Name>NEXT_PUBLIC_API_BASE_URL</Name>
+      <Name>API_BASE_URL</Name>
       <Value>http://192.168.1.100:8000</Value>
       <Default>http://192.168.1.100:8000</Default>
       <Description>URL del backend plex-trans-backend accesible desde el navegador del cliente. Usa la IP de tu servidor Unraid y el puerto del backend (ej: http://192.168.1.100:8000).</Description>
@@ -39,5 +39,5 @@
   </Environment>
   <Labels/>
   <Config Name="Puerto 3000" Target="3000" Default="3000" Mode="tcp" Description="Puerto de la interfaz web." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
-  <Config Name="NEXT_PUBLIC_API_BASE_URL" Target="NEXT_PUBLIC_API_BASE_URL" Default="http://192.168.1.100:8000" Description="URL del backend accesible desde el navegador. Sustituye 192.168.1.100 por la IP de tu servidor Unraid y el puerto configurado en el backend." Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8000</Config>
+  <Config Name="API_BASE_URL" Target="API_BASE_URL" Default="http://192.168.1.100:8000" Description="URL del backend accesible desde el navegador. Sustituye 192.168.1.100 por la IP de tu servidor Unraid y el puerto configurado en el backend." Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8000</Config>
 </Container>
