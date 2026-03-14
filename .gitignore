@@ -1,0 +1,27 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Base de datos y datos locales
+data/
+
+# Variables de entorno
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
+
+# Frontend - dependencias y build
+frontend/node_modules/
+frontend/.next/
+frontend/.DS_Store
+
+# Logs
+*.log

@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  html,
+  body {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-white text-[17px] leading-relaxed text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  }
+}
+
+@layer components {
+  .container {
+    @apply mx-auto max-w-6xl p-6;
+  }
+
+  .card {
+    @apply rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900/30;
+  }
+
+  .row {
+    @apply flex flex-wrap items-end gap-3;
+  }
+
+  .field {
+    @apply flex min-w-[220px] flex-col gap-1.5;
+  }
+
+  label {
+    @apply text-sm text-zinc-700 dark:text-zinc-300;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply rounded-lg border border-zinc-200 bg-white px-3 py-2 text-base text-zinc-900 outline-none ring-0 transition placeholder:text-zinc-500 focus:border-yellow-400 focus:bg-zinc-50 focus:outline-none dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100 dark:placeholder:text-zinc-500 dark:focus:border-yellow-500 dark:focus:bg-zinc-900/50;
+  }
+
+  textarea {
+    @apply min-h-[92px] w-full;
+  }
+
+  input[type='checkbox'],
+  input[type='radio'] {
+    @apply accent-yellow-500 dark:accent-yellow-400;
+  }
+
+  .nav {
+    @apply mb-5 flex items-center gap-4 border-b border-zinc-200 py-3 dark:border-zinc-800;
+  }
+
+  .muted {
+    @apply text-zinc-500 dark:text-zinc-400;
+  }
+
+  .error {
+    @apply text-rose-600 dark:text-rose-300;
+  }
+
+  .ok {
+    @apply text-emerald-700 dark:text-emerald-300;
+  }
+
+  table {
+    @apply mt-3 w-full border-collapse;
+  }
+
+  th,
+  td {
+    @apply border-t border-zinc-200 p-2.5 align-top dark:border-zinc-800;
+  }
+
+  th {
+    @apply text-left text-sm font-medium text-zinc-600 dark:text-zinc-300;
+  }
+
+  .pagination {
+    @apply mt-3 flex items-center justify-between gap-3 border-t border-zinc-200 pt-3 dark:border-zinc-800;
+  }
+}
