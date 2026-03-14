@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="frontend/public/logo.png" alt="Plex Language Media Tool" width="100" />
+</p>
+
 # Plex Language Media Tool
 
 Aplicación web para traducir automáticamente las sinopsis de tu servidor Plex al español usando inteligencia artificial.
