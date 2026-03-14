@@ -1,0 +1,90 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>plex-trans-backend</Name>
+  <Repository>unraiders/plex-trans:backend</Repository>
+  <Registry>https://hub.docker.com/r/unraiders/plex-trans</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/unraiders/plex-trans</Support>
+  <Project>https://github.com/unraiders/plex-trans</Project>
+  <Overview>Backend API de Plex Language Media Tool. Traduce automáticamente las sinopsis de tu servidor Plex al español usando IA.</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI/>
+  <TemplateURL>https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-backend.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/unraiders/plex-trans/main/frontend/public/logo.png</Icon>
+  <ExtraParams/>
+  <Description>Backend API de Plex Language Media Tool.</Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>8000</HostPort>
+        <ContainerPort>8000</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data>
+    <Volume>
+      <HostDir>/mnt/user/appdata/plex-trans/data</HostDir>
+      <ContainerDir>/data</ContainerDir>
+      <Mode>rw</Mode>
+    </Volume>
+  </Data>
+  <Environment>
+    <Variable>
+      <Name>JWT_SECRET</Name>
+      <Value>cambia-esto-por-un-secreto-seguro</Value>
+      <Default>cambia-esto-por-un-secreto-seguro</Default>
+      <Description>Clave secreta para firmar los tokens JWT. Cámbiala por una cadena aleatoria segura.</Description>
+      <Display>always</Display>
+      <Required>true</Required>
+      <Mask>true</Mask>
+    </Variable>
+    <Variable>
+      <Name>CORS_ORIGINS</Name>
+      <Value>*</Value>
+      <Default>*</Default>
+      <Description>Orígenes CORS permitidos. Usa * para permitir todos o especifica la URL del frontend (ej: http://192.168.1.100:3000).</Description>
+      <Display>always</Display>
+      <Required>true</Required>
+      <Mask>false</Mask>
+    </Variable>
+    <Variable>
+      <Name>APP_DB_PATH</Name>
+      <Value>/data/app.db</Value>
+      <Default>/data/app.db</Default>
+      <Description>Ruta de la base de datos SQLite. No cambiar salvo que sepas lo que haces.</Description>
+      <Display>always</Display>
+      <Required>true</Required>
+      <Mask>false</Mask>
+    </Variable>
+    <Variable>
+      <Name>JWT_EXPIRES_MINUTES</Name>
+      <Value>10080</Value>
+      <Default>10080</Default>
+      <Description>Duración del token JWT en minutos. Por defecto 7 días (10080).</Description>
+      <Display>advanced</Display>
+      <Required>false</Required>
+      <Mask>false</Mask>
+    </Variable>
+    <Variable>
+      <Name>MEDIA_CACHE_TTL_SEC</Name>
+      <Value>300</Value>
+      <Default>300</Default>
+      <Description>Tiempo de vida en segundos de la caché de medios en memoria. Por defecto 300 (5 minutos).</Description>
+      <Display>advanced</Display>
+      <Required>false</Required>
+      <Mask>false</Mask>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="data" Target="/data" Default="/mnt/user/appdata/plex-trans/data" Mode="rw" Description="Directorio donde se almacena la base de datos SQLite." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/plex-trans/data</Config>
+  <Config Name="Puerto 8000" Target="8000" Default="8000" Mode="tcp" Description="Puerto del API backend." Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+  <Config Name="JWT_SECRET" Target="JWT_SECRET" Default="cambia-esto-por-un-secreto-seguro" Description="Clave secreta para firmar los tokens JWT. Cámbiala por una cadena aleatoria segura." Type="Variable" Display="always" Required="true" Mask="true">cambia-esto-por-un-secreto-seguro</Config>
+  <Config Name="CORS_ORIGINS" Target="CORS_ORIGINS" Default="*" Description="Orígenes CORS permitidos. Usa * para permitir todos o especifica la URL del frontend." Type="Variable" Display="always" Required="true" Mask="false">*</Config>
+  <Config Name="APP_DB_PATH" Target="APP_DB_PATH" Default="/data/app.db" Description="Ruta de la base de datos SQLite." Type="Variable" Display="always" Required="true" Mask="false">/data/app.db</Config>
+  <Config Name="JWT_EXPIRES_MINUTES" Target="JWT_EXPIRES_MINUTES" Default="10080" Description="Duración del token JWT en minutos. Por defecto 7 días." Type="Variable" Display="advanced" Required="false" Mask="false">10080</Config>
+  <Config Name="MEDIA_CACHE_TTL_SEC" Target="MEDIA_CACHE_TTL_SEC" Default="300" Description="Tiempo de vida en segundos de la caché de medios en memoria." Type="Variable" Display="advanced" Required="false" Mask="false">300</Config>
+</Container>

@@ -1,0 +1,43 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>plex-trans-frontend</Name>
+  <Repository>unraiders/plex-trans:frontend</Repository>
+  <Registry>https://hub.docker.com/r/unraiders/plex-trans</Registry>
+  <Network>bridge</Network>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/unraiders/plex-trans</Support>
+  <Project>https://github.com/unraiders/plex-trans</Project>
+  <Overview>Frontend web de Plex Language Media Tool. Interfaz para buscar, traducir y aplicar traducciones de sinopsis en tu servidor Plex.</Overview>
+  <Category>MediaApp:Other Tools:</Category>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-frontend.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/unraiders/plex-trans/main/frontend/public/logo.png</Icon>
+  <ExtraParams/>
+  <Description>Frontend web de Plex Language Media Tool. Requiere que el contenedor plex-trans-backend esté en ejecución.</Description>
+  <Networking>
+    <Mode>bridge</Mode>
+    <Publish>
+      <Port>
+        <HostPort>3000</HostPort>
+        <ContainerPort>3000</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
+    </Publish>
+  </Networking>
+  <Data/>
+  <Environment>
+    <Variable>
+      <Name>NEXT_PUBLIC_API_BASE_URL</Name>
+      <Value>http://192.168.1.100:8000</Value>
+      <Default>http://192.168.1.100:8000</Default>
+      <Description>URL del backend plex-trans-backend accesible desde el navegador del cliente. Usa la IP de tu servidor Unraid y el puerto del backend (ej: http://192.168.1.100:8000).</Description>
+      <Display>always</Display>
+      <Required>true</Required>
+      <Mask>false</Mask>
+    </Variable>
+  </Environment>
+  <Labels/>
+  <Config Name="Puerto 3000" Target="3000" Default="3000" Mode="tcp" Description="Puerto de la interfaz web." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="NEXT_PUBLIC_API_BASE_URL" Target="NEXT_PUBLIC_API_BASE_URL" Default="http://192.168.1.100:8000" Description="URL del backend accesible desde el navegador. Sustituye 192.168.1.100 por la IP de tu servidor Unraid y el puerto configurado en el backend." Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8000</Config>
+</Container>
