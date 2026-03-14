@@ -9,7 +9,7 @@ async function getApiBaseUrl(): Promise<string> {
   } catch {
     _apiBaseUrl = 'http://localhost:8000'
   }
-  return _apiBaseUrl
+  return _apiBaseUrl!
 }
 
 export type ApiFetchOptions = {
