@@ -27,6 +27,14 @@ El flujo de trabajo es:
 
 ---
 
+## Capturas de pantalla
+
+| Login | Medios | Ajustes |
+|-------|--------|---------|
+| ![Login](docs/screenshots/login.png) | ![Medios](docs/screenshots/media.png) | ![Ajustes](docs/screenshots/settings.png) |
+
+---
+
 ## Stack
 
 | Capa | Tecnología |
