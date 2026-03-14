@@ -167,10 +167,6 @@ Recuerda ajustar en cada plantilla:
 - **Backend:** `JWT_SECRET` por una cadena segura y `CORS_ORIGINS` por la URL de tu frontend
 - **Frontend:** `NEXT_PUBLIC_API_BASE_URL` por la IP y puerto de tu backend (ej: `http://192.168.1.100:8000`)
 
-### Opción 2 — Community Applications
-
-Si tienes el plugin **Community Applications** instalado, busca "plex-trans" directamente en la pestaña **Apps**.
-
 ---
 
 ## Aviso importante
