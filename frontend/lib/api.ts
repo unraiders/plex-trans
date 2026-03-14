@@ -1,4 +1,16 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+let _apiBaseUrl: string | null = null
+
+async function getApiBaseUrl(): Promise<string> {
+  if (_apiBaseUrl) return _apiBaseUrl
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' })
+    const data = await res.json()
+    _apiBaseUrl = data.apiBaseUrl || 'http://localhost:8000'
+  } catch {
+    _apiBaseUrl = 'http://localhost:8000'
+  }
+  return _apiBaseUrl
+}
 
 export type ApiFetchOptions = {
   method?: string
@@ -29,7 +41,9 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
   const authToken = token || getToken()
   if (authToken) headers.Authorization = `Bearer ${authToken}`
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
+  const baseUrl = await getApiBaseUrl()
+
+  const res = await fetch(`${baseUrl}${path}`, {
     method: method || 'GET',
     headers,
     body: body ? JSON.stringify(body) : undefined,
