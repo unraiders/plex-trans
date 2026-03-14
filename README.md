@@ -147,6 +147,32 @@ Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres provee
 
 ---
 
+## Instalación en Unraid
+
+### Opción 1 — Plantillas via SSH (recomendado)
+
+Conecta por SSH a tu servidor Unraid y ejecuta los siguientes comandos para descargar las plantillas directamente:
+
+```bash
+curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans-backend.xml \
+  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-backend.xml
+
+curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans-frontend.xml \
+  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-frontend.xml
+```
+
+Después ve a **Docker → Add Container** y las plantillas aparecerán en el desplegable de **Plantillas de usuario**.
+
+Recuerda ajustar en cada plantilla:
+- **Backend:** `JWT_SECRET` por una cadena segura y `CORS_ORIGINS` por la URL de tu frontend
+- **Frontend:** `NEXT_PUBLIC_API_BASE_URL` por la IP y puerto de tu backend (ej: `http://192.168.1.100:8000`)
+
+### Opción 2 — Community Applications
+
+Si tienes el plugin **Community Applications** instalado, busca "plex-trans" directamente en la pestaña **Apps**.
+
+---
+
 ## Aviso importante
 
 > **Haz una copia de seguridad de tu instancia de Plex antes de usar esta aplicación.**
