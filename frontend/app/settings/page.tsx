@@ -260,16 +260,12 @@ export default function SettingsPage() {
       const body: Record<string, unknown> = {
         plex_ip: plexIp,
         plex_port: plexPort,
-        bibliotecas: selectedLibraries,
         ai_profiles: outgoingProfiles,
         active_ai_profile_id: activeProfileId,
-        offline_mode: offlineMode,
       }
       if (plexToken) body.plex_token = plexToken
       const updated = await apiFetch<Settings>('/settings', { method: 'PUT', body })
       setSettings(updated)
-      setOfflineMode(!!updated.offline_mode)
-      setMediaCacheLastUpdated(updated.media_cache_last_updated || null)
       setPlexToken('')
       setAiApiKey('')
       setAiApiKeyDirty(false)
@@ -367,7 +363,10 @@ export default function SettingsPage() {
               <Switch
                 id="offline-mode"
                 checked={offlineMode}
-                onCheckedChange={setOfflineMode}
+                onCheckedChange={(v) => {
+                  setOfflineMode(v)
+                  apiFetch('/settings', { method: 'PUT', body: { offline_mode: v } }).catch(() => {})
+                }}
               />
               <Label htmlFor="offline-mode" className="cursor-pointer">
                 {offlineMode ? 'Activo' : 'Inactivo'}
