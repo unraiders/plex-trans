@@ -859,6 +859,12 @@ class MediaListResponse(BaseModel):
 
 class ImportResult(BaseModel):
     imported: int
+    by_library: Dict[str, int]
+
+
+class MediaCacheStats(BaseModel):
+    total: int
+    by_library: Dict[str, int]
 
 
 class TranslateRequest(BaseModel):
@@ -1469,7 +1475,21 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
             (now,),
         )
 
-    return ImportResult(imported=len(all_items))
+    by_library: Dict[str, int] = {}
+    for it in all_items:
+        by_library[it.library] = by_library.get(it.library, 0) + 1
+
+    return ImportResult(imported=len(all_items), by_library=by_library)
+
+
+@app.get("/media/cache/stats", response_model=MediaCacheStats)
+def media_cache_stats(_user=Depends(get_current_user)) -> MediaCacheStats:
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT library, COUNT(*) as cnt FROM media_cache GROUP BY library"
+        ).fetchall()
+    by_library = {r["library"]: r["cnt"] for r in rows}
+    return MediaCacheStats(total=sum(by_library.values()), by_library=by_library)
 
 
 @app.post("/media/translate", response_model=List[TranslationOut])
