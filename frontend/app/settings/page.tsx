@@ -14,9 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../../components/ui/select'
+import { Switch } from '../../components/ui/switch'
 import Nav from '../_nav'
 import { apiFetch } from '../../lib/api'
 import { useAuth } from '../../lib/useAuth'
+import { toast } from 'sonner'
 
 type AIProfile = {
   id: string
@@ -38,6 +40,8 @@ type Settings = {
   ai_api_key_set?: boolean
   ai_profiles?: AIProfile[]
   active_ai_profile_id?: string
+  offline_mode?: boolean
+  media_cache_last_updated?: string | null
 }
 
 type PlexLibrary = {
@@ -63,6 +67,9 @@ export default function SettingsPage() {
   const [activeProfileId, setActiveProfileId] = useState<string>('')
   const [aiApiKey, setAiApiKey] = useState('')
   const [aiApiKeyDirty, setAiApiKeyDirty] = useState(false)
+  const [offlineMode, setOfflineMode] = useState(false)
+  const [mediaCacheLastUpdated, setMediaCacheLastUpdated] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
 
   const plexTokenHint = useMemo(() => {
     if (!settings) return ''
@@ -117,6 +124,8 @@ export default function SettingsPage() {
         }
         setAiApiKey('')
         setAiApiKeyDirty(false)
+        setOfflineMode(!!s.offline_mode)
+        setMediaCacheLastUpdated(s.media_cache_last_updated || null)
 
         try {
           const libs = await apiFetch<PlexLibrary[]>('/plex/libraries')
@@ -185,6 +194,23 @@ export default function SettingsPage() {
     setAiApiKeyDirty(false)
   }
 
+  async function importar() {
+    setImporting(true)
+    setError('')
+    setOk('')
+    try {
+      const res = await apiFetch<{ imported: number }>('/media/import', { method: 'POST' })
+      const now = new Date().toISOString()
+      setMediaCacheLastUpdated(now)
+      toast.info(`Importación completada`, { description: `${res.imported} elemento(s) importados` })
+      setOk(`Importados: ${res.imported}`)
+    } catch (e: any) {
+      setError(e?.message || 'Error en la importación')
+    } finally {
+      setImporting(false)
+    }
+  }
+
   async function save() {
     setSaving(true)
     setError('')
@@ -209,10 +235,13 @@ export default function SettingsPage() {
         bibliotecas: selectedLibraries,
         ai_profiles: outgoingProfiles,
         active_ai_profile_id: activeProfileId,
+        offline_mode: offlineMode,
       }
       if (plexToken) body.plex_token = plexToken
       const updated = await apiFetch<Settings>('/settings', { method: 'PUT', body })
       setSettings(updated)
+      setOfflineMode(!!updated.offline_mode)
+      setMediaCacheLastUpdated(updated.media_cache_last_updated || null)
       setPlexToken('')
       setAiApiKey('')
       setAiApiKeyDirty(false)
@@ -411,6 +440,49 @@ export default function SettingsPage() {
 
             <div className="flex items-center justify-end gap-3">
               <Button onClick={save} disabled={saving} type="button">
+                {saving ? 'Guardando...' : 'Guardar'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Modo offline</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-zinc-500 dark:text-zinc-400">
+              Cuando está activo, la búsqueda de medios usa la caché local en lugar de consultar Plex en cada sesión.
+              Importa primero los medios para poblar la caché.
+            </p>
+            <div className="flex items-center gap-3">
+              <Switch
+                id="offline-mode"
+                checked={offlineMode}
+                onCheckedChange={setOfflineMode}
+              />
+              <Label htmlFor="offline-mode" className="cursor-pointer">
+                {offlineMode ? 'Activo' : 'Inactivo'}
+              </Label>
+            </div>
+            {mediaCacheLastUpdated && (
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Última importación:{' '}
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  {new Date(mediaCacheLastUpdated).toLocaleString('es-ES')}
+                </span>
+              </p>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={importar}
+                disabled={importing || saving}
+              >
+                {importing ? 'Importando...' : 'Importar medios de Plex'}
+              </Button>
+              <Button onClick={save} disabled={saving || importing} type="button">
                 {saving ? 'Guardando...' : 'Guardar'}
               </Button>
             </div>

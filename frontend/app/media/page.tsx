@@ -49,7 +49,7 @@ import { toast } from 'sonner'
 
 type PlexLibrary = { type: string; title: string }
 type AIProfile = { id: string; name?: string; ia?: string; ia_modelo?: string }
-type Settings = { ia?: string; ai_profiles?: AIProfile[]; active_ai_profile_id?: string }
+type Settings = { ia?: string; ai_profiles?: AIProfile[]; active_ai_profile_id?: string; offline_mode?: boolean }
 
 type MediaItem = {
   ratingKey: string | number
@@ -83,6 +83,7 @@ export default function MediaPage() {
 
   const [libraries, setLibraries] = useState<PlexLibrary[]>([])
   const [aiProfileLabel, setAiProfileLabel] = useState<{ name: string; ia: string; modelo: string } | null>(null)
+  const [isOffline, setIsOffline] = useState(false)
   const [library, setLibrary] = useState('')
   const [search, setSearch] = useState('')
   const [limit, setLimit] = useState('')
@@ -293,6 +294,7 @@ export default function MediaPage() {
           ia: (active.ia || s?.ia || '').trim(),
           modelo: (active.ia_modelo || '').trim(),
         } : null)
+        setIsOffline(!!s?.offline_mode)
       })
       .catch(() => { setAiProfileLabel(null) })
     return () => { mounted = false }
@@ -476,7 +478,14 @@ export default function MediaPage() {
       <div className="mx-auto w-full max-w-7xl space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Medios</CardTitle>
+            <CardTitle className="flex items-center gap-3">
+              Medios
+              {isOffline && (
+                <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                  Modo offline
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {error && <p className="error text-sm">{error}</p>}
