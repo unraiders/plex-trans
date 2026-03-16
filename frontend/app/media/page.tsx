@@ -317,7 +317,7 @@ export default function MediaPage() {
     searchAbortRef.current?.abort()
   }
 
-  async function fetchPage(nextPage: number, pageSizeOverride?: number, showToast = false) {
+  async function fetchPage(nextPage: number, pageSizeOverride?: number, showToast = false, forceRefresh = false) {
     const requestId = (searchRequestIdRef.current += 1)
     searchAbortRef.current?.abort()
     const controller = new AbortController()
@@ -327,7 +327,7 @@ export default function MediaPage() {
     setLoading(true)
     try {
       const cacheKey = `${queryKey}:${nextPage}`
-      const cached = pageCache[cacheKey]
+      const cached = !forceRefresh ? pageCache[cacheKey] : undefined
       if (cached) {
         const hydrated = (cached.items || []).map((x) => ({
           ...x,
@@ -391,7 +391,7 @@ export default function MediaPage() {
     }
     setTotal(0)
     setPage(1)
-    await fetchPage(1, undefined, true)
+    await fetchPage(1, undefined, true, true)
   }
 
   async function traducirSeleccion() {
