@@ -1,8 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { Loader2, TriangleAlert } from 'lucide-react'
+import { Loader2, TriangleAlert, X } from 'lucide-react'
 import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -73,6 +73,7 @@ export default function SettingsPage() {
   const [mediaCacheLastUpdated, setMediaCacheLastUpdated] = useState<string | null>(null)
   const [cacheStats, setCacheStats] = useState<{ total: number; by_library: Record<string, number> } | null>(null)
   const [importing, setImporting] = useState(false)
+  const importAbortRef = useRef<AbortController | null>(null)
 
   const plexTokenHint = useMemo(() => {
     if (!settings) return ''
@@ -204,12 +205,21 @@ export default function SettingsPage() {
     setAiApiKeyDirty(false)
   }
 
+  function cancelarImport() {
+    importAbortRef.current?.abort()
+  }
+
   async function importar() {
+    const controller = new AbortController()
+    importAbortRef.current = controller
     setImporting(true)
     setError('')
     setOk('')
     try {
-      const res = await apiFetch<{ imported: number; by_library: Record<string, number> }>('/media/import', { method: 'POST' })
+      const res = await apiFetch<{ imported: number; by_library: Record<string, number> }>('/media/import', {
+        method: 'POST',
+        signal: controller.signal,
+      })
       const now = new Date().toISOString()
       setMediaCacheLastUpdated(now)
       toast.info(`Importación completada`, { description: `${res.imported} elemento(s) importados` })
@@ -217,7 +227,11 @@ export default function SettingsPage() {
       const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
       setCacheStats(stats)
     } catch (e: any) {
-      setError(e?.message || 'Error en la importación')
+      if (e?.name === 'AbortError') {
+        setOk('Importación cancelada')
+      } else {
+        setError(e?.message || 'Error en la importación')
+      }
     } finally {
       setImporting(false)
     }
@@ -390,6 +404,17 @@ export default function SettingsPage() {
                 {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {importing ? 'Importando...' : 'Importar medios de Plex'}
               </Button>
+              {importing && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  onClick={cancelarImport}
+                  title="Cancelar importación"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             {importing && (
               <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-300 text-center whitespace-nowrap w-fit mx-auto">
