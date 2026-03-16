@@ -384,10 +384,10 @@ export default function MediaPage() {
     setOk('')
     setItems([])
     setRowSelection({})
+    setPageCache({})
     if (Object.keys(processed).length > 0) {
       setTranslations({})
       setProcessed({})
-      setPageCache({})
     }
     setTotal(0)
     setPage(1)
