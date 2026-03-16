@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
-import { Loader2 } from 'lucide-react'
+import { Loader2, TriangleAlert } from 'lucide-react'
+import { Alert, AlertDescription } from '../../components/ui/alert'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -379,7 +380,7 @@ export default function SettingsPage() {
                 </span>
               </div>
             )}
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-start gap-3">
               <Button
                 type="button"
                 variant="secondary"
@@ -389,6 +390,14 @@ export default function SettingsPage() {
                 {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {importing ? 'Importando...' : 'Importar medios de Plex'}
               </Button>
+              {importing && (
+                <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-300 max-w-sm">
+                  <TriangleAlert className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
+                  <AlertDescription>
+                    Importación en curso. Si abandonas esta página el proceso se interrumpirá.
+                  </AlertDescription>
+                </Alert>
+              )}
             </div>
           </CardContent>
         </Card>
