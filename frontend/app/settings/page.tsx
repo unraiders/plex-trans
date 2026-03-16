@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 
+import { Loader2 } from 'lucide-react'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { Checkbox } from '../../components/ui/checkbox'
@@ -355,28 +356,26 @@ export default function SettingsPage() {
               </Label>
             </div>
             {mediaCacheLastUpdated && (
-              <div className="space-y-1">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Última importación:{' '}
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                    {new Date(mediaCacheLastUpdated).toLocaleString('es-ES')}
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Última importación:{' '}
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  {new Date(mediaCacheLastUpdated).toLocaleString('es-ES')}
+                </span>
+              </p>
+            )}
+            {cacheStats && cacheStats.total > 0 && cacheStats.by_library && (
+              <div className="flex flex-wrap gap-2">
+                {Object.entries(cacheStats.by_library).map(([lib, count]) => (
+                  <span
+                    key={lib}
+                    className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                  >
+                    {lib}: <span className="font-semibold">{count}</span>
                   </span>
-                </p>
-                {cacheStats && cacheStats.total > 0 && cacheStats.by_library && (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {Object.entries(cacheStats.by_library).map(([lib, count]) => (
-                      <span
-                        key={lib}
-                        className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
-                      >
-                        {lib}: <span className="font-semibold">{count}</span>
-                      </span>
-                    ))}
-                    <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-                      Total: {cacheStats.total}
-                    </span>
-                  </div>
-                )}
+                ))}
+                <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                  Total: {cacheStats.total}
+                </span>
               </div>
             )}
             <div className="flex flex-wrap items-center gap-3">
@@ -386,6 +385,7 @@ export default function SettingsPage() {
                 onClick={importar}
                 disabled={importing || saving}
               >
+                {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {importing ? 'Importando...' : 'Importar medios de Plex'}
               </Button>
             </div>
