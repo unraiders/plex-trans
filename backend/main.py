@@ -95,10 +95,16 @@ def db_init() -> None:
                 language_code TEXT NOT NULL,
                 summary TEXT NOT NULL,
                 library TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                translation TEXT DEFAULT ''
             )
             """
         )
+        cache_cols = {
+            r["name"] for r in conn.execute("PRAGMA table_info(media_cache)").fetchall()
+        }
+        if "translation" not in cache_cols:
+            conn.execute("ALTER TABLE media_cache ADD COLUMN translation TEXT DEFAULT ''")
         cols = {
             r["name"] for r in conn.execute("PRAGMA table_info(settings)").fetchall()
         }
@@ -848,6 +854,7 @@ class MediaItem(BaseModel):
     language_code: str
     summary: str
     library: str
+    translation: str = ""
 
 
 class MediaListResponse(BaseModel):
@@ -1099,6 +1106,7 @@ def media_list(
                 language_code=r["language_code"],
                 summary=r["summary"],
                 library=r["library"],
+                translation=r.get("translation") or "",
             ))
         if limit_total:
             all_items = all_items[:limit_total]
@@ -1559,9 +1567,10 @@ def media_process(
                 conn.execute(
                     """
                     UPDATE media_cache
-                    SET summary = ?, language_name = 'Español', language_code = 'es', updated_at = ?
+                    SET summary = ?, language_name = 'Español', language_code = 'es',
+                        translation = ?, updated_at = ?
                     WHERE rating_key = ?
                     """,
-                    (tr, now, rk),
+                    (tr, tr, now, rk),
                 )
     return ProcessResult(updated=updated, errors=errors)
