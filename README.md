@@ -23,9 +23,13 @@ El flujo de trabajo es:
 
 - Soporte para múltiples proveedores de IA: **OpenAI** (y APIs compatibles), **Ollama** (modelos locales) y **Google Translate** vía Deep Translator
 - Gestión de perfiles de IA: crea varios perfiles y cambia entre ellos desde Ajustes
+- **Modo offline** — importa todos los medios no-español a una caché SQLite local; las búsquedas son instantáneas sin conectar con Plex en cada sesión
+- Traducciones persistentes en modo offline: las sinopsis ya procesadas se guardan en la caché y se muestran automáticamente en futuras sesiones
 - Detección automática de idioma con lógica especial para español/catalán
 - Filtro "Solo no español" para mostrar únicamente los candidatos a traducir
 - Caché de páginas en sesión para navegación rápida sin repetir búsquedas
+- Estado de la tabla restaurado automáticamente al volver a la página de Medios
+- Estadísticas de biblioteca en Ajustes: total de películas, series, temporadas y episodios
 - Autenticación con JWT, cambio de usuario y contraseña desde la app
 - Interfaz en modo claro/oscuro
 

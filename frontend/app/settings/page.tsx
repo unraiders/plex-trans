@@ -49,6 +49,9 @@ type Settings = {
 type PlexLibrary = {
   type: string
   title: string
+  total?: number
+  seasons?: number
+  episodes?: number
 }
 
 export default function SettingsPage() {
@@ -60,6 +63,7 @@ export default function SettingsPage() {
 
   const [settings, setSettings] = useState<Settings | null>(null)
   const [libraries, setLibraries] = useState<PlexLibrary[]>([])
+  const [loadingLibraries, setLoadingLibraries] = useState(true)
 
   const [plexIp, setPlexIp] = useState('')
   const [plexPort, setPlexPort] = useState('')
@@ -73,7 +77,13 @@ export default function SettingsPage() {
   const [mediaCacheLastUpdated, setMediaCacheLastUpdated] = useState<string | null>(null)
   const [cacheStats, setCacheStats] = useState<{ total: number; by_library: Record<string, number> } | null>(null)
   const [importing, setImporting] = useState(false)
+  const [importElapsed, setImportElapsed] = useState(0)
+  const [importDuration, setImportDuration] = useState<string | null>(() => {
+    try { return localStorage.getItem('plex_import_duration') } catch { return null }
+  })
   const importAbortRef = useRef<AbortController | null>(null)
+  const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const importElapsedRef = useRef(0)
 
   const plexTokenHint = useMemo(() => {
     if (!settings) return ''
@@ -146,6 +156,8 @@ export default function SettingsPage() {
           if (!mounted) return
           setLibraries([])
           setError(e?.message || 'Error cargando bibliotecas')
+        } finally {
+          if (mounted) setLoadingLibraries(false)
         }
       } catch (e: any) {
         if (!mounted) return
@@ -207,6 +219,12 @@ export default function SettingsPage() {
     setAiApiKeyDirty(false)
   }
 
+  function formatElapsed(secs: number) {
+    const m = Math.floor(secs / 60).toString().padStart(2, '0')
+    const s = (secs % 60).toString().padStart(2, '0')
+    return `${m}:${s}`
+  }
+
   function cancelarImport() {
     importAbortRef.current?.abort()
   }
@@ -215,8 +233,15 @@ export default function SettingsPage() {
     const controller = new AbortController()
     importAbortRef.current = controller
     setImporting(true)
+    setImportElapsed(0)
+    importElapsedRef.current = 0
+    setImportDuration(null)
     setError('')
     setOk('')
+    importTimerRef.current = setInterval(() => {
+      importElapsedRef.current += 1
+      setImportElapsed(importElapsedRef.current)
+    }, 1000)
     try {
       const res = await apiFetch<{ imported: number; by_library: Record<string, number> }>('/media/import', {
         method: 'POST',
@@ -226,6 +251,11 @@ export default function SettingsPage() {
       setMediaCacheLastUpdated(now)
       toast.info(`Importación completada`, { description: `${res.imported} elemento(s) importados` })
       setOk(`Importados: ${res.imported}`)
+      try {
+        sessionStorage.removeItem('plex_page_cache')
+        sessionStorage.removeItem('plex_last_search')
+        sessionStorage.setItem('plex_autoload', '1')
+      } catch {}
       const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
       setCacheStats(stats)
     } catch (e: any) {
@@ -235,6 +265,13 @@ export default function SettingsPage() {
         setError(e?.message || 'Error en la importación')
       }
     } finally {
+      if (importTimerRef.current) {
+        clearInterval(importTimerRef.current)
+        importTimerRef.current = null
+      }
+      const duration = formatElapsed(importElapsedRef.current)
+      setImportDuration(duration)
+      try { localStorage.setItem('plex_import_duration', duration) } catch {}
       setImporting(false)
     }
   }
@@ -271,11 +308,14 @@ export default function SettingsPage() {
       setAiApiKeyDirty(false)
       setOk('Guardado')
       try {
+        setLoadingLibraries(true)
         const libs = await apiFetch<PlexLibrary[]>('/plex/libraries')
         setLibraries(libs || [])
       } catch (e: any) {
         setLibraries([])
         setError(e?.message || 'Error cargando bibliotecas')
+      } finally {
+        setLoadingLibraries(false)
       }
     } catch (e: any) {
       setError(e?.message || 'Error')
@@ -326,7 +366,9 @@ export default function SettingsPage() {
             <CardTitle>Bibliotecas</CardTitle>
           </CardHeader>
           <CardContent>
-            {libraries.length === 0 ? (
+            {loadingLibraries ? (
+              <p className="muted text-sm">Cargando bibliotecas...</p>
+            ) : libraries.length === 0 ? (
               <p className="muted text-sm">
                 No se han podido cargar bibliotecas. Comprueba Plex y guarda antes.
               </p>
@@ -335,14 +377,41 @@ export default function SettingsPage() {
                 {libraries.map((l) => (
                   <label
                     key={`${l.type}:${l.title}`}
-                    className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
+                    className="flex flex-col gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-100"
                   >
-                    <Checkbox
-                      checked={selectedLibraries.includes(l.title)}
-                      onCheckedChange={() => toggleLibrary(l.title)}
-                    />
-                    <span className="flex-1">{l.title}</span>
-                    <span className="muted text-xs">({l.type})</span>
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        checked={selectedLibraries.includes(l.title)}
+                        onCheckedChange={() => toggleLibrary(l.title)}
+                      />
+                      <span className="flex-1">{l.title}</span>
+                      <span className="muted text-xs">({l.type})</span>
+                    </div>
+                    {l.total != null && (
+                      <div className="flex flex-wrap gap-1.5 pl-6">
+                        {l.type === 'movie' ? (
+                          <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                            {l.total} películas
+                          </span>
+                        ) : (
+                          <>
+                            <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                              {l.total} series
+                            </span>
+                            {l.seasons != null && (
+                              <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/30 dark:text-orange-400">
+                                {l.seasons} temporadas
+                              </span>
+                            )}
+                            {l.episodes != null && (
+                              <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800 dark:bg-teal-900/30 dark:text-teal-400">
+                                {l.episodes} episodios
+                              </span>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
                   </label>
                 ))}
               </div>
@@ -378,6 +447,9 @@ export default function SettingsPage() {
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   {new Date(mediaCacheLastUpdated).toLocaleString('es-ES')}
                 </span>
+                {importDuration && (
+                  <> · Tiempo empleado: <span className="font-medium text-zinc-700 dark:text-zinc-300">{importDuration}</span></>
+                )}
               </p>
             )}
             {cacheStats && cacheStats.total > 0 && cacheStats.by_library && (
@@ -403,7 +475,7 @@ export default function SettingsPage() {
                 disabled={importing || saving}
               >
                 {importing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {importing ? 'Importando...' : 'Importar medios de Plex'}
+                {importing ? `Importando... ${formatElapsed(importElapsed)}` : 'Importar medios de Plex'}
               </Button>
               {importing && (
                 <Button

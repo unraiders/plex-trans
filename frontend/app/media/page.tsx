@@ -289,6 +289,14 @@ export default function MediaPage() {
   useEffect(() => {
     if (autoRestoredRef.current) return
     autoRestoredRef.current = true
+    try {
+      const autoload = sessionStorage.getItem('plex_autoload')
+      if (autoload) {
+        sessionStorage.removeItem('plex_autoload')
+        fetchPage(1, undefined, false, true)
+        return
+      }
+    } catch {}
     const saved = readLastSearch()
     if (saved) fetchPage(saved.page || 1)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -344,7 +352,22 @@ export default function MediaPage() {
       const cacheKey = `${queryKey}:${nextPage}`
       const cached = !forceRefresh ? pageCache[cacheKey] : undefined
       if (cached) {
-        const hydrated = (cached.items || []).map((x) => ({
+        const cachedBase = cached.items || []
+        // Auto-populate processed/translations from cached items that have DB translation
+        const withDbTrans = cachedBase.filter((x) => (x.translation || '').trim())
+        if (withDbTrans.length > 0) {
+          setTranslations((prev) => {
+            const next = { ...prev }
+            for (const x of withDbTrans) if (!next[String(x.ratingKey)]) next[String(x.ratingKey)] = x.translation!
+            return next
+          })
+          setProcessed((prev) => {
+            const next = { ...prev }
+            for (const x of withDbTrans) next[String(x.ratingKey)] = true
+            return next
+          })
+        }
+        const hydrated = cachedBase.map((x) => ({
           ...x,
           translation: translations[String(x.ratingKey)] ?? x.translation ?? '',
         }))
@@ -375,6 +398,20 @@ export default function MediaPage() {
         ...prev,
         [cacheKey]: { items: normalizedBase, total: Number(data.total || 0), page: Number(data.page || nextPage) },
       }))
+      // Auto-populate processed/translations from items that already have translation in DB (offline mode)
+      const withDbTrans = normalizedBase.filter((x) => (x.translation || '').trim())
+      if (withDbTrans.length > 0) {
+        setTranslations((prev) => {
+          const next = { ...prev }
+          for (const x of withDbTrans) if (!next[String(x.ratingKey)]) next[String(x.ratingKey)] = x.translation!
+          return next
+        })
+        setProcessed((prev) => {
+          const next = { ...prev }
+          for (const x of withDbTrans) next[String(x.ratingKey)] = true
+          return next
+        })
+      }
       const normalized = normalizedBase.map((x) => ({
         ...x,
         translation: translations[String(x.ratingKey)] ?? x.translation ?? '',
@@ -402,11 +439,9 @@ export default function MediaPage() {
     setItems([])
     setRowSelection({})
     setPageCache({})
+    setTranslations({})
+    setProcessed({})
     try { sessionStorage.removeItem('plex_last_search') } catch {}
-    if (Object.keys(processed).length > 0) {
-      setTranslations({})
-      setProcessed({})
-    }
     setTotal(0)
     setPage(1)
     await fetchPage(1, undefined, true, true)
@@ -459,6 +494,7 @@ export default function MediaPage() {
         method: 'POST',
         body: { items: payload },
       })
+      const processedKeys = new Set(payload.map((it) => it.ratingKey))
       setProcessed((prev) => {
         const next = { ...prev }
         for (const it of payload) next[it.ratingKey] = true
@@ -467,6 +503,27 @@ export default function MediaPage() {
       setRowSelection((prev) => {
         const next = { ...prev }
         for (const it of payload) next[it.ratingKey] = false
+        return next
+      })
+      setItems((prev) =>
+        prev.map((it) =>
+          processedKeys.has(String(it.ratingKey))
+            ? { ...it, language_name: 'Español', language_code: 'es' }
+            : it
+        )
+      )
+      setPageCache((prev) => {
+        const next: Record<string, PageCacheEntry> = {}
+        for (const [k, entry] of Object.entries(prev)) {
+          next[k] = {
+            ...entry,
+            items: entry.items.map((it) =>
+              processedKeys.has(String(it.ratingKey))
+                ? { ...it, language_name: 'Español', language_code: 'es' }
+                : it
+            ),
+          }
+        }
         return next
       })
       setOk(`Actualizados: ${res.updated} | Errores: ${res.errors}`)
@@ -681,7 +738,8 @@ export default function MediaPage() {
                       setPageSize(next)
                       setLimit('')
                       setPage(1)
-                      fetchPage(1, next)
+                      setPageCache({})
+                      fetchPage(1, next, false, true)
                     }}
                   >
                     <SelectTrigger className="h-9 w-[96px] px-2 text-sm" aria-label="Por página">

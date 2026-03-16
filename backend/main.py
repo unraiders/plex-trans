@@ -844,6 +844,9 @@ def actualizar_sinopsis_plex(
 class LibraryOut(BaseModel):
     title: str
     type: str
+    total: Optional[int] = None
+    seasons: Optional[int] = None
+    episodes: Optional[int] = None
 
 
 class MediaItem(BaseModel):
@@ -1061,14 +1064,43 @@ def settings_put(payload: SettingsIn, _user=Depends(get_current_user)) -> Settin
     return _settings_out(updated)
 
 
+def _section_total(base_url: str, token: str, section_key: str, media_type: int) -> int:
+    """Fetch only the totalSize from a Plex library section without loading items."""
+    from xml.etree import ElementTree as ET
+    url = f"{base_url}/library/sections/{section_key}/all"
+    r = requests.get(
+        url,
+        headers={"X-Plex-Token": token},
+        params={"type": str(media_type), "X-Plex-Container-Size": "0", "X-Plex-Container-Start": "0"},
+        timeout=15,
+    )
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    return int(root.get("totalSize", 0))
+
+
 @app.get("/plex/libraries", response_model=List[LibraryOut])
 def plex_libraries(_user=Depends(get_current_user)) -> List[LibraryOut]:
     settings = _settings_get()
     plex = _plex_connect(settings)
+    base_url = plex._baseurl
+    token = settings.get("plex_token") or ""
     out: List[LibraryOut] = []
     for s in plex.library.sections():
-        if getattr(s, "type", None) in {"movie", "show"}:
-            out.append(LibraryOut(title=s.title, type=s.type))
+        lib_type = getattr(s, "type", None)
+        if lib_type not in {"movie", "show"}:
+            continue
+        try:
+            if lib_type == "movie":
+                total = _section_total(base_url, token, s.key, 1)
+                out.append(LibraryOut(title=s.title, type=lib_type, total=total))
+            else:  # show
+                total = _section_total(base_url, token, s.key, 2)
+                seasons = _section_total(base_url, token, s.key, 3)
+                episodes = _section_total(base_url, token, s.key, 4)
+                out.append(LibraryOut(title=s.title, type=lib_type, total=total, seasons=seasons, episodes=episodes))
+        except Exception:
+            out.append(LibraryOut(title=s.title, type=lib_type))
     out.sort(key=lambda x: (x.type, x.title.lower()))
     return out
 
