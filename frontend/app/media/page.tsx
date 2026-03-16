@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 
 import {
   ColumnDef,
@@ -73,6 +73,12 @@ type TranslateResponseItem = { ratingKey: string | number; translation: string }
 type ProcessResponse = { updated: number; errors: number }
 type PageCacheEntry = { items: MediaItem[]; total: number; page: number }
 
+type LastSearch = { search: string; library: string; limit: string; nonSpanishOnly: boolean; page: number }
+
+function readLastSearch(): LastSearch | null {
+  try { const s = sessionStorage.getItem('plex_last_search'); return s ? JSON.parse(s) : null } catch { return null }
+}
+
 export default function MediaPage() {
   const ready = useAuth()
   const [error, setError] = useState('')
@@ -84,15 +90,15 @@ export default function MediaPage() {
   const [libraries, setLibraries] = useState<PlexLibrary[]>([])
   const [aiProfileLabel, setAiProfileLabel] = useState<{ name: string; ia: string; modelo: string } | null>(null)
   const [isOffline, setIsOffline] = useState(false)
-  const [library, setLibrary] = useState('')
-  const [search, setSearch] = useState('')
-  const [limit, setLimit] = useState('')
+  const [library, setLibrary] = useState(() => readLastSearch()?.library || '')
+  const [search, setSearch] = useState(() => readLastSearch()?.search || '')
+  const [limit, setLimit] = useState(() => readLastSearch()?.limit || '')
   const [pageSize, setPageSize] = useState(() => {
     try { const s = localStorage.getItem('plex_page_size'); return s ? Number(s) : 50 } catch { return 50 }
   })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() => readLastSearch()?.page || 1)
   const [total, setTotal] = useState(0)
-  const [nonSpanishOnly, setNonSpanishOnly] = useState(true)
+  const [nonSpanishOnly, setNonSpanishOnly] = useState(() => readLastSearch()?.nonSpanishOnly ?? true)
 
   const [items, setItems] = useState<MediaItem[]>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -107,6 +113,7 @@ export default function MediaPage() {
   })
   const searchAbortRef = useRef<AbortController | null>(null)
   const searchRequestIdRef = useRef(0)
+  const autoRestoredRef = useRef(false)
 
   const effectivePageSize = useMemo(() => Number(pageSize || 50), [pageSize])
   const effectiveLimitTotal = useMemo(() => {
@@ -280,6 +287,14 @@ export default function MediaPage() {
   })
 
   useEffect(() => {
+    if (autoRestoredRef.current) return
+    autoRestoredRef.current = true
+    const saved = readLastSearch()
+    if (saved) fetchPage(saved.page || 1)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     let mounted = true
     apiFetch<PlexLibrary[]>('/plex/libraries')
       .then((d) => { if (mounted) setLibraries(d || []) })
@@ -337,6 +352,7 @@ export default function MediaPage() {
         setTotal(Number(cached.total || 0))
         setPage(Number(cached.page || nextPage))
         setOk(`Cargados: ${hydrated.length}`)
+        try { sessionStorage.setItem('plex_last_search', JSON.stringify({ search: search.trim(), library: library.trim(), limit, nonSpanishOnly, page: nextPage })) } catch {}
         return
       }
       setItems([])
@@ -367,6 +383,7 @@ export default function MediaPage() {
       setTotal(Number(data.total || 0))
       setPage(Number(data.page || nextPage))
       setOk(`Cargados: ${normalized.length}`)
+      try { sessionStorage.setItem('plex_last_search', JSON.stringify({ search: search.trim(), library: library.trim(), limit, nonSpanishOnly, page: nextPage })) } catch {}
       if (showToast) toast.info(`Búsqueda completada`, { description: `${Number(data.total || 0)} elemento(s) encontrados` })
     } catch (e: any) {
       if (e?.name === 'AbortError') {
@@ -385,6 +402,7 @@ export default function MediaPage() {
     setItems([])
     setRowSelection({})
     setPageCache({})
+    try { sessionStorage.removeItem('plex_last_search') } catch {}
     if (Object.keys(processed).length > 0) {
       setTranslations({})
       setProcessed({})

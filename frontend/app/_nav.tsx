@@ -36,6 +36,7 @@ export default function Nav() {
     sessionStorage.removeItem('plex_page_cache')
     sessionStorage.removeItem('plex_translations')
     sessionStorage.removeItem('plex_processed')
+    sessionStorage.removeItem('plex_last_search')
     window.location.href = '/'
   }
 
