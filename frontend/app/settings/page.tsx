@@ -370,7 +370,7 @@ export default function SettingsPage() {
                 {Object.entries(cacheStats.by_library).map(([lib, count]) => (
                   <span
                     key={lib}
-                    className="rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300"
+                    className="rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-900/30 dark:text-green-400"
                   >
                     {lib}: <span className="font-semibold">{count}</span>
                   </span>
