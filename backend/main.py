@@ -1084,8 +1084,9 @@ def media_list(
         lib_filter = (library or "").strip()
         with db_conn() as conn:
             rows = conn.execute("SELECT * FROM media_cache").fetchall()
+            raw_rows = [dict(r) for r in rows]
         all_items: List[MediaItem] = []
-        for r in rows:
+        for r in raw_rows:
             if lib_filter and r["library"] != lib_filter:
                 continue
             if filtro and not _title_matches(r["title"], filtro):
@@ -1488,7 +1489,7 @@ def media_cache_stats(_user=Depends(get_current_user)) -> MediaCacheStats:
         rows = conn.execute(
             "SELECT library, COUNT(*) as cnt FROM media_cache GROUP BY library"
         ).fetchall()
-    by_library = {r["library"]: r["cnt"] for r in rows}
+        by_library = {r["library"]: r["cnt"] for r in rows}
     return MediaCacheStats(total=sum(by_library.values()), by_library=by_library)
 
 

@@ -213,14 +213,8 @@ export default function SettingsPage() {
       setMediaCacheLastUpdated(now)
       toast.info(`Importación completada`, { description: `${res.imported} elemento(s) importados` })
       setOk(`Importados: ${res.imported}`)
-      // Leer stats frescos desde la BD para asegurar que los datos son correctos
-      try {
-        const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
-        setCacheStats(stats)
-      } catch {
-        // Fallback: usar los datos de la respuesta del import
-        setCacheStats({ total: res.imported, by_library: res.by_library ?? {} })
-      }
+      const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
+      setCacheStats(stats)
     } catch (e: any) {
       setError(e?.message || 'Error en la importación')
     } finally {
