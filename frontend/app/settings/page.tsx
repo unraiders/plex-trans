@@ -362,7 +362,7 @@ export default function SettingsPage() {
                     {new Date(mediaCacheLastUpdated).toLocaleString('es-ES')}
                   </span>
                 </p>
-                {cacheStats && cacheStats.total > 0 && (
+                {cacheStats && cacheStats.total > 0 && cacheStats.by_library && (
                   <div className="flex flex-wrap gap-2 pt-1">
                     {Object.entries(cacheStats.by_library).map(([lib, count]) => (
                       <span
