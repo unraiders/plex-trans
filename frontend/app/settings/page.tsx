@@ -166,7 +166,9 @@ export default function SettingsPage() {
       const set = new Set(prev)
       if (set.has(name)) set.delete(name)
       else set.add(name)
-      return Array.from(set)
+      const next = Array.from(set)
+      apiFetch('/settings', { method: 'PUT', body: { bibliotecas: next } }).catch(() => {})
+      return next
     })
   }
 
