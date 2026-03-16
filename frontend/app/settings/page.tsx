@@ -391,7 +391,7 @@ export default function SettingsPage() {
                 {importing ? 'Importando...' : 'Importar medios de Plex'}
               </Button>
               {importing && (
-                <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-300 max-w-sm">
+                <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-300 w-auto whitespace-nowrap">
                   <TriangleAlert className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />
                   <AlertDescription>
                     Importación en curso. Si abandonas esta página el proceso se interrumpirá.
