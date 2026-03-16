@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 
 import {
   ColumnDef,
@@ -49,7 +49,7 @@ import { toast } from 'sonner'
 
 type PlexLibrary = { type: string; title: string }
 type AIProfile = { id: string; name?: string; ia?: string; ia_modelo?: string }
-type Settings = { ia?: string; ai_profiles?: AIProfile[]; active_ai_profile_id?: string }
+type Settings = { ia?: string; ai_profiles?: AIProfile[]; active_ai_profile_id?: string; offline_mode?: boolean }
 
 type MediaItem = {
   ratingKey: string | number
@@ -73,6 +73,12 @@ type TranslateResponseItem = { ratingKey: string | number; translation: string }
 type ProcessResponse = { updated: number; errors: number }
 type PageCacheEntry = { items: MediaItem[]; total: number; page: number }
 
+type LastSearch = { search: string; library: string; limit: string; nonSpanishOnly: boolean; page: number }
+
+function readLastSearch(): LastSearch | null {
+  try { const s = sessionStorage.getItem('plex_last_search'); return s ? JSON.parse(s) : null } catch { return null }
+}
+
 export default function MediaPage() {
   const ready = useAuth()
   const [error, setError] = useState('')
@@ -83,15 +89,16 @@ export default function MediaPage() {
 
   const [libraries, setLibraries] = useState<PlexLibrary[]>([])
   const [aiProfileLabel, setAiProfileLabel] = useState<{ name: string; ia: string; modelo: string } | null>(null)
-  const [library, setLibrary] = useState('')
-  const [search, setSearch] = useState('')
-  const [limit, setLimit] = useState('')
+  const [isOffline, setIsOffline] = useState(false)
+  const [library, setLibrary] = useState(() => readLastSearch()?.library || '')
+  const [search, setSearch] = useState(() => readLastSearch()?.search || '')
+  const [limit, setLimit] = useState(() => readLastSearch()?.limit || '')
   const [pageSize, setPageSize] = useState(() => {
     try { const s = localStorage.getItem('plex_page_size'); return s ? Number(s) : 50 } catch { return 50 }
   })
-  const [page, setPage] = useState(1)
+  const [page, setPage] = useState(() => readLastSearch()?.page || 1)
   const [total, setTotal] = useState(0)
-  const [nonSpanishOnly, setNonSpanishOnly] = useState(true)
+  const [nonSpanishOnly, setNonSpanishOnly] = useState(() => readLastSearch()?.nonSpanishOnly ?? true)
 
   const [items, setItems] = useState<MediaItem[]>([])
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
@@ -106,6 +113,7 @@ export default function MediaPage() {
   })
   const searchAbortRef = useRef<AbortController | null>(null)
   const searchRequestIdRef = useRef(0)
+  const autoRestoredRef = useRef(false)
 
   const effectivePageSize = useMemo(() => Number(pageSize || 50), [pageSize])
   const effectiveLimitTotal = useMemo(() => {
@@ -279,6 +287,22 @@ export default function MediaPage() {
   })
 
   useEffect(() => {
+    if (autoRestoredRef.current) return
+    autoRestoredRef.current = true
+    try {
+      const autoload = sessionStorage.getItem('plex_autoload')
+      if (autoload) {
+        sessionStorage.removeItem('plex_autoload')
+        fetchPage(1, undefined, false, true)
+        return
+      }
+    } catch {}
+    const saved = readLastSearch()
+    if (saved) fetchPage(saved.page || 1)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
     let mounted = true
     apiFetch<PlexLibrary[]>('/plex/libraries')
       .then((d) => { if (mounted) setLibraries(d || []) })
@@ -293,6 +317,7 @@ export default function MediaPage() {
           ia: (active.ia || s?.ia || '').trim(),
           modelo: (active.ia_modelo || '').trim(),
         } : null)
+        setIsOffline(!!s?.offline_mode)
       })
       .catch(() => { setAiProfileLabel(null) })
     return () => { mounted = false }
@@ -315,7 +340,7 @@ export default function MediaPage() {
     searchAbortRef.current?.abort()
   }
 
-  async function fetchPage(nextPage: number, pageSizeOverride?: number, showToast = false) {
+  async function fetchPage(nextPage: number, pageSizeOverride?: number, showToast = false, forceRefresh = false) {
     const requestId = (searchRequestIdRef.current += 1)
     searchAbortRef.current?.abort()
     const controller = new AbortController()
@@ -325,9 +350,24 @@ export default function MediaPage() {
     setLoading(true)
     try {
       const cacheKey = `${queryKey}:${nextPage}`
-      const cached = pageCache[cacheKey]
+      const cached = !forceRefresh ? pageCache[cacheKey] : undefined
       if (cached) {
-        const hydrated = (cached.items || []).map((x) => ({
+        const cachedBase = cached.items || []
+        // Auto-populate processed/translations from cached items that have DB translation
+        const withDbTrans = cachedBase.filter((x) => (x.translation || '').trim())
+        if (withDbTrans.length > 0) {
+          setTranslations((prev) => {
+            const next = { ...prev }
+            for (const x of withDbTrans) if (!next[String(x.ratingKey)]) next[String(x.ratingKey)] = x.translation!
+            return next
+          })
+          setProcessed((prev) => {
+            const next = { ...prev }
+            for (const x of withDbTrans) next[String(x.ratingKey)] = true
+            return next
+          })
+        }
+        const hydrated = cachedBase.map((x) => ({
           ...x,
           translation: translations[String(x.ratingKey)] ?? x.translation ?? '',
         }))
@@ -335,6 +375,7 @@ export default function MediaPage() {
         setTotal(Number(cached.total || 0))
         setPage(Number(cached.page || nextPage))
         setOk(`Cargados: ${hydrated.length}`)
+        try { sessionStorage.setItem('plex_last_search', JSON.stringify({ search: search.trim(), library: library.trim(), limit, nonSpanishOnly, page: nextPage })) } catch {}
         return
       }
       setItems([])
@@ -357,6 +398,20 @@ export default function MediaPage() {
         ...prev,
         [cacheKey]: { items: normalizedBase, total: Number(data.total || 0), page: Number(data.page || nextPage) },
       }))
+      // Auto-populate processed/translations from items that already have translation in DB (offline mode)
+      const withDbTrans = normalizedBase.filter((x) => (x.translation || '').trim())
+      if (withDbTrans.length > 0) {
+        setTranslations((prev) => {
+          const next = { ...prev }
+          for (const x of withDbTrans) if (!next[String(x.ratingKey)]) next[String(x.ratingKey)] = x.translation!
+          return next
+        })
+        setProcessed((prev) => {
+          const next = { ...prev }
+          for (const x of withDbTrans) next[String(x.ratingKey)] = true
+          return next
+        })
+      }
       const normalized = normalizedBase.map((x) => ({
         ...x,
         translation: translations[String(x.ratingKey)] ?? x.translation ?? '',
@@ -365,6 +420,7 @@ export default function MediaPage() {
       setTotal(Number(data.total || 0))
       setPage(Number(data.page || nextPage))
       setOk(`Cargados: ${normalized.length}`)
+      try { sessionStorage.setItem('plex_last_search', JSON.stringify({ search: search.trim(), library: library.trim(), limit, nonSpanishOnly, page: nextPage })) } catch {}
       if (showToast) toast.info(`Búsqueda completada`, { description: `${Number(data.total || 0)} elemento(s) encontrados` })
     } catch (e: any) {
       if (e?.name === 'AbortError') {
@@ -382,14 +438,13 @@ export default function MediaPage() {
     setOk('')
     setItems([])
     setRowSelection({})
-    if (Object.keys(processed).length > 0) {
-      setTranslations({})
-      setProcessed({})
-      setPageCache({})
-    }
+    setPageCache({})
+    setTranslations({})
+    setProcessed({})
+    try { sessionStorage.removeItem('plex_last_search') } catch {}
     setTotal(0)
     setPage(1)
-    await fetchPage(1, undefined, true)
+    await fetchPage(1, undefined, true, true)
   }
 
   async function traducirSeleccion() {
@@ -439,6 +494,7 @@ export default function MediaPage() {
         method: 'POST',
         body: { items: payload },
       })
+      const processedKeys = new Set(payload.map((it) => it.ratingKey))
       setProcessed((prev) => {
         const next = { ...prev }
         for (const it of payload) next[it.ratingKey] = true
@@ -447,6 +503,27 @@ export default function MediaPage() {
       setRowSelection((prev) => {
         const next = { ...prev }
         for (const it of payload) next[it.ratingKey] = false
+        return next
+      })
+      setItems((prev) =>
+        prev.map((it) =>
+          processedKeys.has(String(it.ratingKey))
+            ? { ...it, language_name: 'Español', language_code: 'es' }
+            : it
+        )
+      )
+      setPageCache((prev) => {
+        const next: Record<string, PageCacheEntry> = {}
+        for (const [k, entry] of Object.entries(prev)) {
+          next[k] = {
+            ...entry,
+            items: entry.items.map((it) =>
+              processedKeys.has(String(it.ratingKey))
+                ? { ...it, language_name: 'Español', language_code: 'es' }
+                : it
+            ),
+          }
+        }
         return next
       })
       setOk(`Actualizados: ${res.updated} | Errores: ${res.errors}`)
@@ -476,7 +553,14 @@ export default function MediaPage() {
       <div className="mx-auto w-full max-w-7xl space-y-4">
         <Card>
           <CardHeader>
-            <CardTitle>Medios</CardTitle>
+            <CardTitle className="flex items-center gap-3">
+              Medios
+              {isOffline && (
+                <span className="rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                  Modo offline
+                </span>
+              )}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {error && <p className="error text-sm">{error}</p>}
@@ -654,7 +738,8 @@ export default function MediaPage() {
                       setPageSize(next)
                       setLimit('')
                       setPage(1)
-                      fetchPage(1, next)
+                      setPageCache({})
+                      fetchPage(1, next, false, true)
                     }}
                   >
                     <SelectTrigger className="h-9 w-[96px] px-2 text-sm" aria-label="Por página">

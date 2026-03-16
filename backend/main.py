@@ -79,10 +79,32 @@ def db_init() -> None:
                 ai_api_key TEXT,
                 ai_profiles TEXT,
                 active_ai_profile_id TEXT,
+                offline_mode INTEGER DEFAULT 0,
+                media_cache_last_updated TEXT,
                 updated_at TEXT NOT NULL
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS media_cache (
+                rating_key TEXT PRIMARY KEY,
+                type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                language_name TEXT NOT NULL,
+                language_code TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                library TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                translation TEXT DEFAULT ''
+            )
+            """
+        )
+        cache_cols = {
+            r["name"] for r in conn.execute("PRAGMA table_info(media_cache)").fetchall()
+        }
+        if "translation" not in cache_cols:
+            conn.execute("ALTER TABLE media_cache ADD COLUMN translation TEXT DEFAULT ''")
         cols = {
             r["name"] for r in conn.execute("PRAGMA table_info(settings)").fetchall()
         }
@@ -90,6 +112,10 @@ def db_init() -> None:
             conn.execute("ALTER TABLE settings ADD COLUMN ai_profiles TEXT")
         if "active_ai_profile_id" not in cols:
             conn.execute("ALTER TABLE settings ADD COLUMN active_ai_profile_id TEXT")
+        if "offline_mode" not in cols:
+            conn.execute("ALTER TABLE settings ADD COLUMN offline_mode INTEGER DEFAULT 0")
+        if "media_cache_last_updated" not in cols:
+            conn.execute("ALTER TABLE settings ADD COLUMN media_cache_last_updated TEXT")
         cur = conn.execute("SELECT id FROM settings WHERE id = 1")
         row = cur.fetchone()
         if row is None:
@@ -190,6 +216,7 @@ class SettingsIn(BaseModel):
     ai_api_key: Optional[str] = None
     ai_profiles: Optional[List[Dict[str, Any]]] = None
     active_ai_profile_id: Optional[str] = None
+    offline_mode: Optional[bool] = None
 
 
 class AIProfileOut(BaseModel):
@@ -212,6 +239,8 @@ class SettingsOut(BaseModel):
     ai_api_key_set: bool = False
     ai_profiles: List[AIProfileOut] = Field(default_factory=list)
     active_ai_profile_id: str = ""
+    offline_mode: bool = False
+    media_cache_last_updated: Optional[str] = None
 
 
 def _ai_profiles_parse(raw: Any) -> List[Dict[str, Any]]:
@@ -428,6 +457,9 @@ def _settings_update(payload: SettingsIn) -> Dict[str, Any]:
     updated["ai_profiles"] = merged_profiles
     updated["active_ai_profile_id"] = active_id
 
+    if "offline_mode" in incoming:
+        updated["offline_mode"] = 1 if incoming["offline_mode"] else 0
+
     with db_conn() as conn:
         conn.execute(
             """
@@ -442,6 +474,7 @@ def _settings_update(payload: SettingsIn) -> Dict[str, Any]:
                 ai_api_key = ?,
                 ai_profiles = ?,
                 active_ai_profile_id = ?,
+                offline_mode = ?,
                 updated_at = ?
             WHERE id = 1
             """,
@@ -456,6 +489,7 @@ def _settings_update(payload: SettingsIn) -> Dict[str, Any]:
                 updated.get("ai_api_key"),
                 json.dumps(merged_profiles, ensure_ascii=False),
                 active_id,
+                updated.get("offline_mode", 0),
                 updated.get("updated_at"),
             ),
         )
@@ -493,6 +527,8 @@ def _settings_out(data: Dict[str, Any]) -> SettingsOut:
         ),
         ai_profiles=profiles_out,
         active_ai_profile_id=active_id,
+        offline_mode=bool(data.get("offline_mode")),
+        media_cache_last_updated=data.get("media_cache_last_updated") or None,
     )
 
 
@@ -808,6 +844,9 @@ def actualizar_sinopsis_plex(
 class LibraryOut(BaseModel):
     title: str
     type: str
+    total: Optional[int] = None
+    seasons: Optional[int] = None
+    episodes: Optional[int] = None
 
 
 class MediaItem(BaseModel):
@@ -818,6 +857,7 @@ class MediaItem(BaseModel):
     language_code: str
     summary: str
     library: str
+    translation: str = ""
 
 
 class MediaListResponse(BaseModel):
@@ -825,6 +865,16 @@ class MediaListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ImportResult(BaseModel):
+    imported: int
+    by_library: Dict[str, int]
+
+
+class MediaCacheStats(BaseModel):
+    total: int
+    by_library: Dict[str, int]
 
 
 class TranslateRequest(BaseModel):
@@ -1014,14 +1064,43 @@ def settings_put(payload: SettingsIn, _user=Depends(get_current_user)) -> Settin
     return _settings_out(updated)
 
 
+def _section_total(base_url: str, token: str, section_key: str, media_type: int) -> int:
+    """Fetch only the totalSize from a Plex library section without loading items."""
+    from xml.etree import ElementTree as ET
+    url = f"{base_url}/library/sections/{section_key}/all"
+    r = requests.get(
+        url,
+        headers={"X-Plex-Token": token},
+        params={"type": str(media_type), "X-Plex-Container-Size": "0", "X-Plex-Container-Start": "0"},
+        timeout=15,
+    )
+    r.raise_for_status()
+    root = ET.fromstring(r.text)
+    return int(root.get("totalSize", 0))
+
+
 @app.get("/plex/libraries", response_model=List[LibraryOut])
 def plex_libraries(_user=Depends(get_current_user)) -> List[LibraryOut]:
     settings = _settings_get()
     plex = _plex_connect(settings)
+    base_url = plex._baseurl
+    token = settings.get("plex_token") or ""
     out: List[LibraryOut] = []
     for s in plex.library.sections():
-        if getattr(s, "type", None) in {"movie", "show"}:
-            out.append(LibraryOut(title=s.title, type=s.type))
+        lib_type = getattr(s, "type", None)
+        if lib_type not in {"movie", "show"}:
+            continue
+        try:
+            if lib_type == "movie":
+                total = _section_total(base_url, token, s.key, 1)
+                out.append(LibraryOut(title=s.title, type=lib_type, total=total))
+            else:  # show
+                total = _section_total(base_url, token, s.key, 2)
+                seasons = _section_total(base_url, token, s.key, 3)
+                episodes = _section_total(base_url, token, s.key, 4)
+                out.append(LibraryOut(title=s.title, type=lib_type, total=total, seasons=seasons, episodes=episodes))
+        except Exception:
+            out.append(LibraryOut(title=s.title, type=lib_type))
     out.sort(key=lambda x: (x.type, x.title.lower()))
     return out
 
@@ -1037,6 +1116,37 @@ def media_list(
     _user=Depends(get_current_user),
 ) -> MediaListResponse:
     settings = _settings_get()
+
+    # Rama offline: leer desde media_cache en lugar de Plex
+    if settings.get("offline_mode"):
+        filtro = (search or "").strip()
+        lib_filter = (library or "").strip()
+        with db_conn() as conn:
+            rows = conn.execute("SELECT * FROM media_cache").fetchall()
+            raw_rows = [dict(r) for r in rows]
+        all_items: List[MediaItem] = []
+        for r in raw_rows:
+            if lib_filter and r["library"] != lib_filter:
+                continue
+            if filtro and not _title_matches(r["title"], filtro):
+                continue
+            all_items.append(MediaItem(
+                ratingKey=r["rating_key"],
+                type=r["type"],
+                title=r["title"],
+                language_name=r["language_name"],
+                language_code=r["language_code"],
+                summary=r["summary"],
+                library=r["library"],
+                translation=r.get("translation") or "",
+            ))
+        if limit_total:
+            all_items = all_items[:limit_total]
+        total = len(all_items)
+        start = (page - 1) * page_size
+        end = start + page_size
+        return MediaListResponse(items=all_items[start:end], total=total, page=page, page_size=page_size)
+
     plex = _plex_connect(settings)
 
     bibliotecas: List[str] = []
@@ -1282,6 +1392,147 @@ def media_list(
     )
 
 
+@app.post("/media/import", response_model=ImportResult)
+def media_import(_user=Depends(get_current_user)) -> ImportResult:
+    settings = _settings_get()
+    plex = _plex_connect(settings)
+    bibliotecas: List[str] = list(settings.get("bibliotecas") or [])
+    if not bibliotecas:
+        raise HTTPException(status_code=400, detail="No hay bibliotecas configuradas")
+
+    all_items: List[MediaItem] = []
+    seen: set = set()
+
+    for lib in bibliotecas:
+        try:
+            section = plex.library.section(lib)
+        except Exception:
+            continue
+        tipo = getattr(section, "type", None)
+        if tipo not in {"movie", "show"}:
+            continue
+
+        if tipo == "movie":
+            for m in section.all():
+                summary = _get_summary(m, plex)
+                if not summary:
+                    continue
+                lang_name, lang_code = detectar_idioma_texto(summary)
+                if es_idioma_espanol(lang_name, lang_code):
+                    continue
+                rk = str(getattr(m, "ratingKey", ""))
+                if not rk or rk in seen:
+                    continue
+                all_items.append(MediaItem(
+                    ratingKey=rk,
+                    type=str(getattr(m, "type", "movie")),
+                    title=str(getattr(m, "title", "")),
+                    language_name=lang_name,
+                    language_code=lang_code,
+                    summary=summary,
+                    library=lib,
+                ))
+                seen.add(rk)
+
+        if tipo == "show":
+            for sh in section.all():
+                summary = _get_summary(sh, plex)
+                if summary:
+                    lang_name, lang_code = detectar_idioma_texto(summary)
+                    if not es_idioma_espanol(lang_name, lang_code):
+                        rk = str(getattr(sh, "ratingKey", ""))
+                        if rk and rk not in seen:
+                            all_items.append(MediaItem(
+                                ratingKey=rk,
+                                type=str(getattr(sh, "type", "show")),
+                                title=str(getattr(sh, "title", "")),
+                                language_name=lang_name,
+                                language_code=lang_code,
+                                summary=summary,
+                                library=lib,
+                            ))
+                            seen.add(rk)
+                try:
+                    for se in sh.seasons():
+                        summary = _get_summary(se, plex)
+                        if not summary:
+                            continue
+                        lang_name, lang_code = detectar_idioma_texto(summary)
+                        if es_idioma_espanol(lang_name, lang_code):
+                            continue
+                        rk = str(getattr(se, "ratingKey", ""))
+                        if not rk or rk in seen:
+                            continue
+                        all_items.append(MediaItem(
+                            ratingKey=rk,
+                            type=str(getattr(se, "type", "season")),
+                            title=_format_title(se),
+                            language_name=lang_name,
+                            language_code=lang_code,
+                            summary=summary,
+                            library=lib,
+                        ))
+                        seen.add(rk)
+                except Exception:
+                    pass
+                try:
+                    for ep in sh.episodes():
+                        summary = _get_summary(ep, plex)
+                        if not summary:
+                            continue
+                        lang_name, lang_code = detectar_idioma_texto(summary)
+                        if es_idioma_espanol(lang_name, lang_code):
+                            continue
+                        rk = str(getattr(ep, "ratingKey", ""))
+                        if not rk or rk in seen:
+                            continue
+                        all_items.append(MediaItem(
+                            ratingKey=rk,
+                            type=str(getattr(ep, "type", "episode")),
+                            title=_format_title(ep),
+                            language_name=lang_name,
+                            language_code=lang_code,
+                            summary=summary,
+                            library=lib,
+                        ))
+                        seen.add(rk)
+                except Exception:
+                    continue
+
+    now = _now_iso()
+    with db_conn() as conn:
+        conn.execute("DELETE FROM media_cache")
+        for it in all_items:
+            conn.execute(
+                """
+                INSERT INTO media_cache
+                    (rating_key, type, title, language_name, language_code, summary, library, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (it.ratingKey, it.type, it.title, it.language_name, it.language_code, it.summary, it.library, now),
+            )
+        conn.execute(
+            "UPDATE settings SET media_cache_last_updated = ? WHERE id = 1",
+            (now,),
+        )
+
+    by_library: Dict[str, int] = {}
+    for it in all_items:
+        by_library[it.library] = by_library.get(it.library, 0) + 1
+
+    return ImportResult(imported=len(all_items), by_library=by_library)
+
+
+@app.get("/media/cache/stats", response_model=MediaCacheStats)
+def media_cache_stats(_user=Depends(get_current_user)) -> MediaCacheStats:
+    with db_conn() as conn:
+        rows = conn.execute(
+            "SELECT library, COUNT(*) as cnt FROM media_cache GROUP BY library"
+        ).fetchall()
+        by_library = {r["library"]: r["cnt"] for r in rows}
+    return MediaCacheStats(total=sum(by_library.values()), by_library=by_library)
+
+
 @app.post("/media/translate", response_model=List[TranslationOut])
 def media_translate(
     payload: TranslateRequest, _user=Depends(get_current_user)
@@ -1328,6 +1579,7 @@ def media_process(
     plex = _plex_connect(settings)
     updated = 0
     errors = 0
+    processed_translations: Dict[str, str] = {}
     for item in payload.items:
         try:
             translation = (item.translation or "").strip()
@@ -1336,7 +1588,21 @@ def media_process(
             video = plex.fetchItem(int(item.ratingKey))
             actualizar_sinopsis_plex(plex, video, translation, bloquear=True)
             updated += 1
+            processed_translations[item.ratingKey] = translation
         except Exception:
             errors += 1
     _media_cache_clear()
+    if processed_translations:
+        now = _now_iso()
+        with db_conn() as conn:
+            for rk, tr in processed_translations.items():
+                conn.execute(
+                    """
+                    UPDATE media_cache
+                    SET summary = ?, language_name = 'Español', language_code = 'es',
+                        translation = ?, updated_at = ?
+                    WHERE rating_key = ?
+                    """,
+                    (tr, tr, now, rk),
+                )
     return ProcessResult(updated=updated, errors=errors)

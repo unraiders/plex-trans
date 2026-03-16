@@ -52,7 +52,7 @@ export default function HelpPage() {
             <div className="p-4 flex flex-col gap-1">
               <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Selección de bibliotecas</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                Una vez guardada la conexión, selecciona las bibliotecas de Plex que quieres incluir en las búsquedas (películas, series, etc.). Solo se mostrarán los medios pertenecientes a las bibliotecas seleccionadas.
+                Selecciona las bibliotecas de Plex que quieres incluir en las búsquedas (películas, series, etc.). Solo se mostrarán los medios pertenecientes a las bibliotecas marcadas. El cambio se guarda automáticamente al marcar o desmarcar cada biblioteca.
               </p>
             </div>
 
@@ -85,10 +85,53 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* PASO 2: Media */}
+        {/* PASO 2: Modo offline */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-500 text-sm font-bold text-zinc-950">2</span>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Modo offline (opcional)</h2>
+          </div>
+
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 divide-y divide-zinc-200 dark:divide-zinc-800">
+
+            <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">¿Qué es el modo offline?</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Por defecto la aplicación consulta Plex en cada búsqueda, lo que puede tardar varios minutos con bibliotecas grandes. El modo offline importa todos los medios no-español a una caché local en la base de datos y a partir de ese momento las búsquedas son instantáneas, sin necesidad de conectar con Plex.
+              </p>
+            </div>
+
+            <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Cómo activarlo</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                En <span className="font-medium text-zinc-700 dark:text-zinc-300">Ajustes → Modo offline</span>, pulsa <span className="font-medium text-zinc-700 dark:text-zinc-300">Importar medios de Plex</span>. La importación recorre todas las bibliotecas seleccionadas y guarda en local los medios cuya sinopsis no está en español. Al terminar se muestra la cantidad importada por biblioteca. Puedes cancelar la importación en cualquier momento con el botón <span className="font-medium text-zinc-700 dark:text-zinc-300">✕</span> que aparece durante el proceso.
+              </p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Una vez importados, activa el switch <span className="font-medium text-zinc-700 dark:text-zinc-300">Modo offline</span>. El cambio se guarda automáticamente. A partir de ese momento el badge <span className="font-medium text-yellow-600 dark:text-yellow-400">Modo offline</span> aparecerá en la página de Medios.
+              </p>
+            </div>
+
+            <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Traducciones persistentes</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                En modo offline, cuando traduces y procesas un medio, la traducción queda guardada en la caché local. La próxima vez que busques, ese elemento aparecerá con su traducción ya visible en la columna <span className="italic">Traducción</span>, indicando que ya fue procesado.
+              </p>
+            </div>
+
+            <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Actualizar la caché</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Si añades contenido nuevo a Plex, vuelve a pulsar <span className="font-medium text-zinc-700 dark:text-zinc-300">Importar medios de Plex</span> para regenerar la caché completa con los nuevos elementos. La fecha de la última importación se muestra bajo el switch.
+              </p>
+            </div>
+
+          </div>
+        </section>
+
+        {/* PASO 3: Media */}
+        <section className="flex flex-col gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-500 text-sm font-bold text-zinc-950">3</span>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Buscar medios</h2>
           </div>
 
@@ -124,10 +167,10 @@ export default function HelpPage() {
           </div>
         </section>
 
-        {/* PASO 3: Traducir y Procesar */}
+        {/* PASO 4: Traducir y Procesar */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-500 text-sm font-bold text-zinc-950">3</span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-yellow-500 text-sm font-bold text-zinc-950">4</span>
             <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Traducir y Procesar</h2>
           </div>
 
