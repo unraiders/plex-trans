@@ -14,6 +14,7 @@ import requests
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from langdetect import DetectorFactory, detect, detect_langs
 from openai import OpenAI
@@ -81,6 +82,7 @@ def db_init() -> None:
                 active_ai_profile_id TEXT,
                 offline_mode INTEGER DEFAULT 0,
                 media_cache_last_updated TEXT,
+                import_duration TEXT,
                 updated_at TEXT NOT NULL
             )
             """
@@ -116,6 +118,8 @@ def db_init() -> None:
             conn.execute("ALTER TABLE settings ADD COLUMN offline_mode INTEGER DEFAULT 0")
         if "media_cache_last_updated" not in cols:
             conn.execute("ALTER TABLE settings ADD COLUMN media_cache_last_updated TEXT")
+        if "import_duration" not in cols:
+            conn.execute("ALTER TABLE settings ADD COLUMN import_duration TEXT")
         cur = conn.execute("SELECT id FROM settings WHERE id = 1")
         row = cur.fetchone()
         if row is None:
@@ -155,6 +159,9 @@ def _jwt_secret() -> str:
     return secret
 
 
+_bearer_scheme = HTTPBearer(auto_error=False)
+
+
 def _create_access_token(user_id: int) -> str:
     exp_minutes = int(_env("JWT_EXPIRES_MINUTES", "10080") or "10080")
     now = datetime.now(timezone.utc)
@@ -177,13 +184,20 @@ def _decode_token(token: str) -> int:
         raise HTTPException(status_code=401, detail="Token inválido")
 
 
-def get_current_user(authorization: Optional[str] = Header(None)) -> sqlite3.Row:
-    if not authorization:
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer_scheme),
+    authorization: Optional[str] = Header(None),
+) -> sqlite3.Row:
+    token: Optional[str] = None
+    if credentials:
+        token = credentials.credentials
+    elif authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            token = parts[1]
+    if not token:
         raise HTTPException(status_code=401, detail="Falta Authorization")
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(status_code=401, detail="Authorization inválida")
-    user_id = _decode_token(parts[1])
+    user_id = _decode_token(token)
     with db_conn() as conn:
         row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
         if row is None:
@@ -241,6 +255,7 @@ class SettingsOut(BaseModel):
     active_ai_profile_id: str = ""
     offline_mode: bool = False
     media_cache_last_updated: Optional[str] = None
+    import_duration: Optional[str] = None
 
 
 def _ai_profiles_parse(raw: Any) -> List[Dict[str, Any]]:
@@ -529,6 +544,7 @@ def _settings_out(data: Dict[str, Any]) -> SettingsOut:
         active_ai_profile_id=active_id,
         offline_mode=bool(data.get("offline_mode")),
         media_cache_last_updated=data.get("media_cache_last_updated") or None,
+        import_duration=data.get("import_duration") or None,
     )
 
 
@@ -1394,6 +1410,7 @@ def media_list(
 
 @app.post("/media/import", response_model=ImportResult)
 def media_import(_user=Depends(get_current_user)) -> ImportResult:
+    import_start = time.time()
     settings = _settings_get()
     plex = _plex_connect(settings)
     bibliotecas: List[str] = list(settings.get("bibliotecas") or [])
@@ -1499,6 +1516,8 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                 except Exception:
                     continue
 
+    elapsed = int(time.time() - import_start)
+    duration = f"{elapsed // 60:02d}:{elapsed % 60:02d}"
     now = _now_iso()
     with db_conn() as conn:
         conn.execute("DELETE FROM media_cache")
@@ -1512,8 +1531,8 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                 (it.ratingKey, it.type, it.title, it.language_name, it.language_code, it.summary, it.library, now),
             )
         conn.execute(
-            "UPDATE settings SET media_cache_last_updated = ? WHERE id = 1",
-            (now,),
+            "UPDATE settings SET media_cache_last_updated = ?, import_duration = ? WHERE id = 1",
+            (now, duration),
         )
 
     by_library: Dict[str, int] = {}
