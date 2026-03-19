@@ -46,7 +46,7 @@ Single-file FastAPI application with:
 
 - **SQLite database** at `/data/app.db` (path overridable via `APP_DB_PATH`) — three tables: `users`, `settings`, `media_cache`
 - **Auth:** JWT tokens with `bcrypt` (direct, not via passlib). First-run bootstrap flow: if no users exist, `/auth/bootstrap` returns `needs_setup: true` and `/auth/register` is open.
-- **Settings:** Plex connection config + AI profiles stored as JSON in the `settings` table. Supports multiple named AI profiles with an active profile pointer. Also stores `offline_mode` (bool) and `media_cache_last_updated` (ISO timestamp).
+- **Settings:** Plex connection config + AI profiles stored as JSON in the `settings` table. Supports multiple named AI profiles with an active profile pointer. Also stores `offline_mode` (bool), `media_cache_last_updated` (ISO timestamp) and `import_duration` (string `mm:ss`).
 - **Translation providers:** `openai` (with custom base URL support for OpenAI-compatible APIs), `ollama` (local LLM), `deep_translator` (Google Translate).
 - **Language detection:** `langdetect` with special disambiguation logic for Spanish vs. Catalan (both detected as `es` or `ca`).
 - **Plex integration:** Uses `plexapi` to browse libraries and write summaries back via `PUT` to the Plex API.
@@ -73,6 +73,7 @@ Single-file FastAPI application with:
 - No minimum password length enforced
 - `PUT /auth/profile` accepts `{ username?: str, new_password?: str }` — no current password required
 - bcrypt used directly (not via passlib, which is incompatible with bcrypt 4+)
+- **Swagger UI auth:** `HTTPBearer` security scheme configured via `_bearer_scheme = HTTPBearer(auto_error=False)` — exposes the Authorize button (candado) in `/docs`. `get_current_user` accepts credentials from both the scheme and the raw `Authorization` header as fallback.
 
 **Library stats (`GET /plex/libraries`):**
 - `LibraryOut` now includes `total`, `seasons`, `episodes` (all Optional[int])
@@ -153,7 +154,7 @@ Next.js 16 app-router application with Tailwind CSS v4 and shadcn/ui components.
 - **Offline switch auto-save:** `onCheckedChange` immediately calls `PUT /settings` with `offline_mode`
 - **Guardar** button only covers Plex connection fields and AI profiles
 - **Library stats:** each library card shows badges — movies: yellow "N películas"; shows: yellow "N series" + orange "N temporadas" + teal "N episodios". `loadingLibraries` state controls "Cargando bibliotecas..." vs error message.
-- **Import timer:** `importElapsedRef` (ref, incremented every second) + `importElapsed` (state, for render). `formatElapsed(secs)` returns `mm:ss`. Button shows `Importando... mm:ss` while running. On finish, `importDuration` state is set and persisted to `localStorage` (`plex_import_duration`) — survives page navigation.
+- **Import timer:** `importElapsedRef` (ref, incremented every second) + `importElapsed` (state, for render). `formatElapsed(secs)` returns `mm:ss`. Button shows `Importando... mm:ss` while running. On finish, the backend calculates the real elapsed time and stores it as `import_duration` (`mm:ss`) in the `settings` table — `GET /settings` returns it so it is visible from any browser/session. The frontend reads it from the API on load and after each import.
 - **Import cancel:** `AbortController` pattern via `importAbortRef`; cancel button (X icon) shown alongside import button while importing
 - **Post-import auto-load:** after successful import, clears `plex_page_cache` + `plex_last_search` and sets `plex_autoload=1` in sessionStorage
 

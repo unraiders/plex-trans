@@ -44,6 +44,7 @@ type Settings = {
   active_ai_profile_id?: string
   offline_mode?: boolean
   media_cache_last_updated?: string | null
+  import_duration?: string | null
 }
 
 type PlexLibrary = {
@@ -78,9 +79,7 @@ export default function SettingsPage() {
   const [cacheStats, setCacheStats] = useState<{ total: number; by_library: Record<string, number> } | null>(null)
   const [importing, setImporting] = useState(false)
   const [importElapsed, setImportElapsed] = useState(0)
-  const [importDuration, setImportDuration] = useState<string | null>(() => {
-    try { return localStorage.getItem('plex_import_duration') } catch { return null }
-  })
+  const [importDuration, setImportDuration] = useState<string | null>(null)
   const importAbortRef = useRef<AbortController | null>(null)
   const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const importElapsedRef = useRef(0)
@@ -140,6 +139,7 @@ export default function SettingsPage() {
         setAiApiKeyDirty(false)
         setOfflineMode(!!s.offline_mode)
         setMediaCacheLastUpdated(s.media_cache_last_updated || null)
+        setImportDuration(s.import_duration || null)
 
         try {
           const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
@@ -247,8 +247,6 @@ export default function SettingsPage() {
         method: 'POST',
         signal: controller.signal,
       })
-      const now = new Date().toISOString()
-      setMediaCacheLastUpdated(now)
       toast.info(`Importación completada`, { description: `${res.imported} elemento(s) importados` })
       setOk(`Importados: ${res.imported}`)
       try {
@@ -256,7 +254,12 @@ export default function SettingsPage() {
         sessionStorage.removeItem('plex_last_search')
         sessionStorage.setItem('plex_autoload', '1')
       } catch {}
-      const stats = await apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats')
+      const [updatedSettings, stats] = await Promise.all([
+        apiFetch<Settings>('/settings'),
+        apiFetch<{ total: number; by_library: Record<string, number> }>('/media/cache/stats'),
+      ])
+      setMediaCacheLastUpdated(updatedSettings.media_cache_last_updated || null)
+      setImportDuration(updatedSettings.import_duration || null)
       setCacheStats(stats)
     } catch (e: any) {
       if (e?.name === 'AbortError') {
@@ -269,9 +272,8 @@ export default function SettingsPage() {
         clearInterval(importTimerRef.current)
         importTimerRef.current = null
       }
-      const duration = formatElapsed(importElapsedRef.current)
-      setImportDuration(duration)
-      try { localStorage.setItem('plex_import_duration', duration) } catch {}
+      importElapsedRef.current = 0
+      setImportElapsed(0)
       setImporting(false)
     }
   }
