@@ -2,6 +2,11 @@
 FROM node:20-bookworm-slim AS frontend-build
 WORKDIR /app/frontend
 
+# La versión real la inyecta el workflow vía --build-arg (misma que la imagen final).
+# Se expone a Next.js como NEXT_PUBLIC_APP_VERSION para mostrarla en el footer.
+ARG VERSION=local
+ENV NEXT_PUBLIC_APP_VERSION=${VERSION}
+
 COPY frontend/package.json /app/frontend/package.json
 RUN npm install
 
