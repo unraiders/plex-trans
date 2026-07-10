@@ -9,7 +9,7 @@ import {
   useReactTable,
   RowSelectionState,
 } from '@tanstack/react-table'
-import { X } from 'lucide-react'
+import { ClipboardCopy, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -245,27 +245,59 @@ export default function MediaPage() {
         cell: ({ row }) => {
           const it = row.original as MediaItem
           const k = String(it.ratingKey)
+          const done = !!processed[k]
           return (
-            <Textarea
-              value={it.translation || ''}
-              onChange={(e) => {
-                const v = e.target.value
-                setTranslations((prev) => {
-                  const next = { ...prev }
-                  if (!String(v || '').trim()) delete next[k]
-                  else next[k] = v
-                  return next
-                })
-                setItems((prev) =>
-                  prev.map((x) =>
-                    String(x.ratingKey) === k ? { ...x, translation: v } : x
+            <div className="space-y-1">
+              <div className="flex justify-end">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  disabled={done || !String(it.summary || '').trim()}
+                  title="Copiar la sinopsis en el campo de traducción"
+                  onClick={() => {
+                    const v = it.summary || ''
+                    setTranslations((prev) => {
+                      const next = { ...prev }
+                      if (!String(v).trim()) delete next[k]
+                      else next[k] = v
+                      return next
+                    })
+                    setItems((prev) =>
+                      prev.map((x) =>
+                        String(x.ratingKey) === k ? { ...x, translation: v } : x
+                      )
+                    )
+                    // Seleccionar la fila para poder procesarla directamente.
+                    if (!done) setRowSelection((prev) => ({ ...prev, [k]: true }))
+                  }}
+                >
+                  <ClipboardCopy className="h-3.5 w-3.5" />
+                  Copiar sinopsis
+                </Button>
+              </div>
+              <Textarea
+                value={it.translation || ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setTranslations((prev) => {
+                    const next = { ...prev }
+                    if (!String(v || '').trim()) delete next[k]
+                    else next[k] = v
+                    return next
+                  })
+                  setItems((prev) =>
+                    prev.map((x) =>
+                      String(x.ratingKey) === k ? { ...x, translation: v } : x
+                    )
                   )
-                )
-                setRowSelection((prev) => ({ ...prev, [k]: false }))
-              }}
-              placeholder="Traducción aparecerá aquí tras pulsar Traducir"
-              className="min-h-[104px]"
-            />
+                  setRowSelection((prev) => ({ ...prev, [k]: false }))
+                }}
+                placeholder="Traducción aparecerá aquí tras pulsar Traducir"
+                className="min-h-[104px]"
+              />
+            </div>
           )
         },
       },
