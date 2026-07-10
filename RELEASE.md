@@ -3,6 +3,7 @@
 ## 🐞 Correcciones
 
 - Corregida la detección de idioma de las sinopsis: muchas descripciones en español (sobre todo cortas) se clasificaban erróneamente como italiano, catalán, indonesio o "desconocido" y quedaban marcadas como no-español.
+- Corregida la versión mostrada en el footer: ya no queda fija en `package.json`; ahora refleja la versión real inyectada en la imagen Docker (con `package.json` como valor de desarrollo local).
 
 ## 🔧 Mejoras
 
