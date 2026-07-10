@@ -1,36 +1,50 @@
-FROM python:3.12-slim AS backend
-
-WORKDIR /app
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-COPY requirements.txt /app/requirements.txt
-RUN pip install --no-cache-dir -r /app/requirements.txt
-
-COPY backend /app/backend
-
-EXPOSE 8000
-CMD ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
-
-FROM node:20-alpine AS frontend-build
-WORKDIR /app
+# ---- Build del frontend (Next.js standalone) ----
+FROM node:20-bookworm-slim AS frontend-build
+WORKDIR /app/frontend
 
 COPY frontend/package.json /app/frontend/package.json
-RUN cd /app/frontend && npm install
+RUN npm install
 
 COPY frontend /app/frontend
-RUN cd /app/frontend && npm run build
+RUN npm run build
 
 
-FROM node:20-alpine AS frontend
-WORKDIR /app
+# ---- Imagen final: backend (FastAPI) + frontend (Next.js) en una sola imagen ----
+FROM python:3.12-slim
+
+# La versión real la inyecta el workflow vía --build-arg desde .version_main / .version_develop.
+# "local" es el valor por defecto para builds manuales sin --build-arg.
+ARG VERSION=local
+ENV VERSION=${VERSION}
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 ENV NODE_ENV=production
+ENV PORT=3000
+ENV HOSTNAME=0.0.0.0
 
-COPY --from=frontend-build /app/frontend/.next/standalone ./
-COPY --from=frontend-build /app/frontend/.next/static ./.next/static
-COPY --from=frontend-build /app/frontend/public ./public
+WORKDIR /app
 
-EXPOSE 3000
-CMD ["node", "server.js"]
+# Runtime de Node.js (solo el binario; el frontend standalone ya incluye sus dependencias).
+# Se usa la misma base Debian bookworm/glibc que python:3.12-slim para compatibilidad de binarios.
+COPY --from=node:20-bookworm-slim /usr/local/bin/node /usr/local/bin/node
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libstdc++6 \
+    && rm -rf /var/lib/apt/lists/*
 
+# Backend
+COPY requirements.txt /app/requirements.txt
+RUN pip install --no-cache-dir -r /app/requirements.txt
+COPY backend /app/backend
+
+# Frontend (Next.js standalone) en /app/web
+COPY --from=frontend-build /app/frontend/.next/standalone /app/web
+COPY --from=frontend-build /app/frontend/.next/static /app/web/.next/static
+COPY --from=frontend-build /app/frontend/public /app/web/public
+
+# Script que arranca ambos procesos
+COPY scripts/start.sh /app/start.sh
+RUN chmod +x /app/start.sh
+
+EXPOSE 8000 3000
+CMD ["/app/start.sh"]

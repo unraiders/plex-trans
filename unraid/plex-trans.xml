@@ -1,23 +1,28 @@
 <?xml version="1.0"?>
 <Container version="2">
-  <Name>plex-trans-backend</Name>
-  <Repository>unraiders/plex-trans:backend</Repository>
+  <Name>plex-trans</Name>
+  <Repository>unraiders/plex-trans:latest</Repository>
   <Registry>https://hub.docker.com/r/unraiders/plex-trans</Registry>
   <Network>bridge</Network>
   <Shell>sh</Shell>
   <Privileged>false</Privileged>
   <Support>https://github.com/unraiders/plex-trans</Support>
   <Project>https://github.com/unraiders/plex-trans</Project>
-  <Overview>Backend API de Plex Language Media Tool. Traduce automáticamente las sinopsis de tu servidor Plex al español usando IA.</Overview>
+  <Overview>Plex Language Media Tool (backend + frontend en una sola imagen). Traduce automáticamente las sinopsis de tu servidor Plex al español usando IA. La interfaz web se sirve en el puerto 3000 y el API en el 8000.</Overview>
   <Category>MediaApp:Other Tools:</Category>
-  <WebUI/>
-  <TemplateURL>https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-backend.xml</TemplateURL>
+  <WebUI>http://[IP]:[PORT:3000]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/unraiders/plex-trans/main/frontend/public/logo.png</Icon>
   <ExtraParams/>
-  <Description>Backend API de Plex Language Media Tool.</Description>
+  <Description>Plex Language Media Tool. Backend (FastAPI) y frontend (Next.js) conviven en una sola imagen. El navegador accede al frontend por el puerto 3000 y este realiza las llamadas al API por el puerto 8000, por lo que ambos puertos deben ser accesibles.</Description>
   <Networking>
     <Mode>bridge</Mode>
     <Publish>
+      <Port>
+        <HostPort>3000</HostPort>
+        <ContainerPort>3000</ContainerPort>
+        <Protocol>tcp</Protocol>
+      </Port>
       <Port>
         <HostPort>8000</HostPort>
         <ContainerPort>8000</ContainerPort>
@@ -33,6 +38,15 @@
     </Volume>
   </Data>
   <Environment>
+    <Variable>
+      <Name>API_BASE_URL</Name>
+      <Value>http://192.168.1.100:8000</Value>
+      <Default>http://192.168.1.100:8000</Default>
+      <Description>URL del API accesible desde el navegador del cliente. Usa la IP de tu servidor Unraid y el puerto del backend (ej: http://192.168.1.100:8000).</Description>
+      <Display>always</Display>
+      <Required>true</Required>
+      <Mask>false</Mask>
+    </Variable>
     <Variable>
       <Name>JWT_SECRET</Name>
       <Value>cambia-esto-por-un-secreto-seguro</Value>
@@ -81,7 +95,9 @@
   </Environment>
   <Labels/>
   <Config Name="data" Target="/data" Default="/mnt/user/appdata/plex-trans/data" Mode="rw" Description="Directorio donde se almacena la base de datos SQLite." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/plex-trans/data</Config>
-  <Config Name="Puerto 8000" Target="8000" Default="8000" Mode="tcp" Description="Puerto del API backend." Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+  <Config Name="Puerto 3000 (Web)" Target="3000" Default="3000" Mode="tcp" Description="Puerto de la interfaz web." Type="Port" Display="always" Required="true" Mask="false">3000</Config>
+  <Config Name="Puerto 8000 (API)" Target="8000" Default="8000" Mode="tcp" Description="Puerto del API backend." Type="Port" Display="always" Required="true" Mask="false">8000</Config>
+  <Config Name="API_BASE_URL" Target="API_BASE_URL" Default="http://192.168.1.100:8000" Description="URL del API accesible desde el navegador. Sustituye 192.168.1.100 por la IP de tu servidor Unraid y el puerto configurado para el API." Type="Variable" Display="always" Required="true" Mask="false">http://192.168.1.100:8000</Config>
   <Config Name="JWT_SECRET" Target="JWT_SECRET" Default="cambia-esto-por-un-secreto-seguro" Description="Clave secreta para firmar los tokens JWT. Cámbiala por una cadena aleatoria segura." Type="Variable" Display="always" Required="true" Mask="true">cambia-esto-por-un-secreto-seguro</Config>
   <Config Name="CORS_ORIGINS" Target="CORS_ORIGINS" Default="*" Description="Orígenes CORS permitidos. Usa * para permitir todos o especifica la URL del frontend." Type="Variable" Display="always" Required="true" Mask="false">*</Config>
   <Config Name="APP_DB_PATH" Target="APP_DB_PATH" Default="/data/app.db" Description="Ruta de la base de datos SQLite." Type="Variable" Display="always" Required="true" Mask="false">/data/app.db</Config>
