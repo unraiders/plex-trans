@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from langdetect import DetectorFactory, detect, detect_langs
+from fast_langdetect import detect
 from openai import OpenAI
 import bcrypt
 from plexapi.exceptions import Unauthorized
@@ -654,85 +654,45 @@ def _format_title(video: Any) -> str:
         return getattr(video, "title", "") or ""
 
 
+_NOMBRES_IDIOMA = {
+    "es": "Español",
+    "en": "Inglés",
+    "fr": "Francés",
+    "de": "Alemán",
+    "it": "Italiano",
+    "pt": "Portugués",
+    "ca": "Catalán",
+    "eu": "Euskera",
+    "gl": "Gallego",
+    "nl": "Neerlandés",
+    "ro": "Rumano",
+    "id": "Indonesio",
+}
+
+# Confianza mínima para aceptar una detección. Por debajo (texto muy corto,
+# mezcla de idiomas o nombres propios que despistan) devolvemos "desconocido"
+# en lugar de arriesgar una etiqueta equivocada. Los "desconocido" se siguen
+# ofreciendo para traducir, así que no se pierde ningún elemento.
+_UMBRAL_CONFIANZA_IDIOMA = 0.35
+
+
 def detectar_idioma_texto(texto: str) -> Tuple[str, str]:
     try:
-        DetectorFactory.seed = 0
-        contenido = (texto or "").strip()
-        if len(contenido) < 20:
+        contenido = " ".join((texto or "").split()).strip()
+        if not contenido:
             return "desconocido", ""
-        probabilidades = detect_langs(contenido)
-        probs: Dict[str, float] = {
-            p.lang: float(p.prob) for p in (probabilidades or [])
-        }
-        if probs.get("es", 0.0) >= 0.35:
-            return "Español", "es"
-        if probabilidades:
-            primary = max(probabilidades, key=lambda x: x.prob).lang
-            if primary == "pt" and probs.get("es", 0.0) >= 0.20:
-                return "Español", "es"
-            if primary == "ca":
-                palabras = re.findall(r"[a-zàèéíïòóúüñç]+", contenido.lower())
-                es_especificas = {
-                    "como",
-                    "para",
-                    "pero",
-                    "porque",
-                    "quien",
-                    "quién",
-                    "tambien",
-                    "también",
-                    "esta",
-                    "este",
-                    "estos",
-                    "estas",
-                    "los",
-                    "las",
-                    "sus",
-                    "muy",
-                    "más",
-                }
-                ca_especificas = {
-                    "com",
-                    "per",
-                    "però",
-                    "perque",
-                    "perquè",
-                    "qui",
-                    "també",
-                    "aquest",
-                    "aquesta",
-                    "aquests",
-                    "aquestes",
-                    "els",
-                    "les",
-                    "seus",
-                    "seves",
-                    "molt",
-                    "amb",
-                }
-                es_hits = sum(1 for w in palabras if w in es_especificas)
-                ca_hits = sum(1 for w in palabras if w in ca_especificas)
-                if ca_hits >= 2 and ca_hits >= es_hits:
-                    pass
-                elif (es_hits >= 2 and es_hits > ca_hits) or (
-                    es_hits >= 1 and probs.get("es", 0.0) >= 0.28 and es_hits > ca_hits
-                ):
-                    return "Español", "es"
-        codigo = (
-            max(probabilidades, key=lambda x: x.prob).lang
-            if probabilidades
-            else detect(contenido)
-        )
-        nombres = {
-            "es": "Español",
-            "en": "Inglés",
-            "fr": "Francés",
-            "de": "Alemán",
-            "it": "Italiano",
-            "pt": "Portugués",
-            "ca": "Catalán",
-        }
-        return nombres.get(codigo, codigo), codigo
+        # model="lite": modelo fastText comprimido incluido en el paquete
+        # (~1 MB), sin descargas en tiempo de ejecución.
+        resultados = detect(contenido, model="lite", k=1)
+        if not resultados:
+            return "desconocido", ""
+        mejor = resultados[0]
+        if float(mejor.get("score", 0.0)) < _UMBRAL_CONFIANZA_IDIOMA:
+            return "desconocido", ""
+        codigo = str(mejor.get("lang", "")).lower()
+        if not codigo:
+            return "desconocido", ""
+        return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
     except Exception:
         return "desconocido", ""
 
