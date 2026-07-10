@@ -112,6 +112,19 @@ export default function HelpPage() {
             </div>
 
             <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Cómo se detecta el idioma (dos fases)</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                El idioma de cada sinopsis se detecta en dos fases. <span className="font-medium text-zinc-700 dark:text-zinc-300">Fase 1 (local)</span>: un análisis muy rápido en el propio servidor recorre todos los elementos y descarta la gran mayoría, que están en español, dejando solo los candidatos que no lo parecen. <span className="font-medium text-zinc-700 dark:text-zinc-300">Fase 2 (Google Translate)</span>: esos candidatos —unas pocas decenas— se verifican con Google, mucho más fiable con sinopsis españolas plagadas de nombres propios extranjeros (actores, personajes, lugares); así se descartan los falsos positivos y se ajusta el idioma de los demás.
+              </p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Gracias a este enfoque, Google solo se consulta para los candidatos en vez de para todos los elementos, de modo que la importación es rápida y a la vez precisa. Si Google no está disponible, se conserva el resultado local de la Fase 1.
+              </p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Durante la importación, un panel muestra el progreso detallado: la fase en curso, la biblioteca y el tipo que se está analizando, cuántos elementos se han procesado, los candidatos/confirmados y el título concreto que se está mirando en ese momento (con una barra de progreso en la Fase 2).
+              </p>
+            </div>
+
+            <div className="p-4 flex flex-col gap-1">
               <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Traducciones persistentes</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 En modo offline, cuando traduces y procesas un medio, la traducción queda guardada en la caché local. La próxima vez que busques, ese elemento aparecerá con su traducción ya visible en la columna <span className="italic">Traducción</span>, indicando que ya fue procesado.
@@ -146,7 +159,7 @@ export default function HelpPage() {
                 La primera búsqueda puede tardar desde varios segundos hasta minutos dependiendo del número de bibliotecas seleccionadas y la cantidad de medios que contengan, ya que la aplicación necesita analizar el idioma de cada sinopsis para determinar cuáles no están en español.
               </p>
               <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                Debemos tener en cuenta que la identificación del idioma en los medios puede no ser 100% precisa y aparecer con otro idioma o como desconocido, especialmente con textos cortos o difíciles de clasificar, pero serán los mínimos.
+                La detección de idioma se hace en dos fases (análisis local rápido y verificación de los candidatos con Google Translate, ver el paso <span className="font-medium text-zinc-700 dark:text-zinc-300">Modo offline</span>), lo que la hace muy fiable incluso con sinopsis españolas llenas de nombres propios extranjeros. Aun así, puede no ser 100% precisa y algún medio aparecer con otro idioma o como desconocido, sobre todo con textos muy cortos, pero serán los mínimos.
               </p>
             </div>
 
@@ -180,6 +193,13 @@ export default function HelpPage() {
               <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Traducir</h3>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 Con los medios seleccionados, pulsa <span className="font-medium text-zinc-700 dark:text-zinc-300">Traducir</span> para enviar las sinopsis al proveedor de IA activo. Las traducciones se muestran en la columna <span className="italic">Traducción</span> de la tabla y quedan guardadas en memoria para revisarlas antes de aplicarlas. Este paso no modifica Plex.
+              </p>
+            </div>
+
+            <div className="p-4 flex flex-col gap-1">
+              <h3 className="font-medium text-zinc-800 dark:text-zinc-200">Copiar la sinopsis a la traducción</h3>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Entre las columnas <span className="italic">Sinopsis</span> y <span className="italic">Traducción</span>, cada fila tiene un botón con una flecha (<span className="font-medium text-zinc-700 dark:text-zinc-300">→</span>). Al pulsarlo se copia el texto de la sinopsis directamente en el campo de traducción y se selecciona la fila, lista para <span className="font-medium text-zinc-700 dark:text-zinc-300">Procesar</span>. Es útil cuando quieres usar el texto tal cual —por ejemplo si la sinopsis ya está bien— en lugar de traducirlo con IA, o como punto de partida para editarlo a mano.
               </p>
             </div>
 
