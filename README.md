@@ -26,7 +26,7 @@ El flujo de trabajo es:
 - Gestión de perfiles de IA: crea varios perfiles y cambia entre ellos desde Ajustes
 - **Modo offline** — importa todos los medios no-español a una caché SQLite local; las búsquedas son instantáneas sin conectar con Plex en cada sesión
 - Traducciones persistentes en modo offline: las sinopsis ya procesadas se guardan en la caché y se muestran automáticamente en futuras sesiones
-- Detección automática de idioma con **Google Translate** (la más fiable con sinopsis españolas llenas de nombres propios extranjeros), con respaldo local fastText (`fast-langdetect`) si Google no está disponible
+- Detección automática de idioma en dos fases: filtrado local rápido con fastText (`fast-langdetect`) y verificación de los candidatos con **Google Translate** (fiable incluso con sinopsis españolas llenas de nombres propios extranjeros), con panel de progreso detallado durante la importación
 - Botón "Copiar sinopsis" en cada fila para volcar la sinopsis original en el campo de traducción con un clic
 - Filtro "Solo no español" para mostrar únicamente los candidatos a traducir
 - Caché de páginas en sesión para navegación rápida sin repetir búsquedas

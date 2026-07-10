@@ -712,22 +712,41 @@ def _detectar_fasttext(contenido: str) -> Tuple[str, str]:
     return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
 
 
+def _detectar_local(contenido: str) -> Tuple[str, str]:
+    """Detección local segura (fastText) para la Fase 1 de la importación."""
+    try:
+        return _detectar_fasttext(contenido)
+    except Exception:
+        return "desconocido", ""
+
+
 def detectar_idioma_texto(texto: str) -> Tuple[str, str]:
     contenido = " ".join((texto or "").split()).strip()
     if not contenido:
         return "desconocido", ""
-    # 1) Google (principal): robusto ante nombres propios extranjeros.
+    # Estrategia híbrida (rápida y precisa):
+    # 1) fastText local, instantáneo. Sus errores son casi siempre
+    #    "español -> otro idioma" (los nombres propios extranjeros lo despistan),
+    #    rara vez al revés. Por eso, si dice español, confiamos y NO llamamos a
+    #    Google. Esto evita una petición de red en la inmensa mayoría de ítems
+    #    (que son españoles) y hace la importación mucho más rápida.
+    try:
+        ft_name, ft_code = _detectar_fasttext(contenido)
+    except Exception:
+        ft_name, ft_code = "desconocido", ""
+    if ft_code == "es":
+        return "Español", "es"
+    # 2) fastText NO lo da como español (otro idioma o "desconocido"): justo el
+    #    caso donde falla. Verificamos con Google, mucho más fiable con textos
+    #    españoles plagados de nombres propios extranjeros.
     try:
         codigo = _detectar_google(contenido)
         if codigo:
             return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
     except Exception:
         pass
-    # 2) Respaldo local (fastText) si Google falla, va lento o limita peticiones.
-    try:
-        return _detectar_fasttext(contenido)
-    except Exception:
-        return "desconocido", ""
+    # 3) Google no disponible: nos quedamos con el resultado local.
+    return ft_name, ft_code
 
 
 def es_idioma_espanol(nombre: Optional[str], codigo: Optional[str]) -> bool:
@@ -1401,6 +1420,31 @@ def media_list(
     )
 
 
+# Estado de la importación en curso, para el panel de progreso detallado del
+# frontend (que lo consulta con GET /media/import/progress).
+_import_progress: Dict[str, Any] = {
+    "running": False,
+    "library": "",
+    "phase": "",
+    "processed": 0,
+    "found": 0,
+    "total": 0,
+    "current": "",
+}
+
+
+def _prog_item(phase: str, library: str, title: str) -> None:
+    _import_progress["phase"] = phase
+    _import_progress["library"] = library
+    _import_progress["processed"] = int(_import_progress.get("processed", 0)) + 1
+    _import_progress["current"] = (title or "")[:140]
+
+
+@app.get("/media/import/progress")
+def media_import_progress(_user=Depends(get_current_user)) -> Dict[str, Any]:
+    return dict(_import_progress)
+
+
 @app.post("/media/import", response_model=ImportResult)
 def media_import(_user=Depends(get_current_user)) -> ImportResult:
     import_start = time.time()
@@ -1410,6 +1454,10 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
     if not bibliotecas:
         raise HTTPException(status_code=400, detail="No hay bibliotecas configuradas")
 
+    _import_progress.update({
+        "running": True, "library": "", "phase": "",
+        "processed": 0, "found": 0, "current": "",
+    })
     all_items: List[MediaItem] = []
     seen: set = set()
 
@@ -1427,7 +1475,8 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                 summary = _get_summary(m, plex)
                 if not summary:
                     continue
-                lang_name, lang_code = detectar_idioma_texto(summary)
+                _prog_item("películas", lib, str(getattr(m, "title", "")))
+                lang_name, lang_code = _detectar_local(summary)
                 if es_idioma_espanol(lang_name, lang_code):
                     continue
                 rk = str(getattr(m, "ratingKey", ""))
@@ -1443,12 +1492,14 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                     library=lib,
                 ))
                 seen.add(rk)
+                _import_progress["found"] = int(_import_progress.get("found", 0)) + 1
 
         if tipo == "show":
             for sh in section.all():
                 summary = _get_summary(sh, plex)
                 if summary:
-                    lang_name, lang_code = detectar_idioma_texto(summary)
+                    _prog_item("series", lib, str(getattr(sh, "title", "")))
+                    lang_name, lang_code = _detectar_local(summary)
                     if not es_idioma_espanol(lang_name, lang_code):
                         rk = str(getattr(sh, "ratingKey", ""))
                         if rk and rk not in seen:
@@ -1462,12 +1513,14 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                                 library=lib,
                             ))
                             seen.add(rk)
+                            _import_progress["found"] = int(_import_progress.get("found", 0)) + 1
                 try:
                     for se in sh.seasons():
                         summary = _get_summary(se, plex)
                         if not summary:
                             continue
-                        lang_name, lang_code = detectar_idioma_texto(summary)
+                        _prog_item("temporadas", lib, _format_title(se))
+                        lang_name, lang_code = _detectar_local(summary)
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(se, "ratingKey", ""))
@@ -1483,6 +1536,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                             library=lib,
                         ))
                         seen.add(rk)
+                        _import_progress["found"] = int(_import_progress.get("found", 0)) + 1
                 except Exception:
                     pass
                 try:
@@ -1490,7 +1544,8 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                         summary = _get_summary(ep, plex)
                         if not summary:
                             continue
-                        lang_name, lang_code = detectar_idioma_texto(summary)
+                        _prog_item("episodios", lib, _format_title(ep))
+                        lang_name, lang_code = _detectar_local(summary)
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(ep, "ratingKey", ""))
@@ -1506,9 +1561,41 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                             library=lib,
                         ))
                         seen.add(rk)
+                        _import_progress["found"] = int(_import_progress.get("found", 0)) + 1
                 except Exception:
                     continue
 
+    # FASE 2: verificar con Google solo los candidatos que la Fase 1 (local) NO
+    # dio como español. Google corrige los falsos positivos (sinopsis españolas
+    # con nombres extranjeros -> se descartan) y ajusta el idioma de las reales.
+    candidatos = all_items
+    all_items = []
+    _import_progress.update({
+        "phase": "Verificando con Google",
+        "library": "",
+        "processed": 0,
+        "found": 0,
+        "total": len(candidatos),
+        "current": "",
+    })
+    for it in candidatos:
+        _import_progress["processed"] = int(_import_progress.get("processed", 0)) + 1
+        _import_progress["current"] = (it.title or "")[:140]
+        try:
+            g_code = _detectar_google(it.summary)
+        except Exception:
+            g_code = None
+        if g_code:
+            it.language_name = _NOMBRES_IDIOMA.get(g_code, g_code)
+            it.language_code = g_code
+        # Si (según Google, o el resultado local si Google falla) es español, se
+        # descarta; solo se guardan los que confirman no ser español.
+        if es_idioma_espanol(it.language_name, it.language_code):
+            continue
+        all_items.append(it)
+        _import_progress["found"] = int(_import_progress.get("found", 0)) + 1
+
+    _import_progress["running"] = False
     elapsed = int(time.time() - import_start)
     duration = f"{elapsed // 60:02d}:{elapsed % 60:02d}"
     now = _now_iso()
