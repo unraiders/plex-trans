@@ -13,6 +13,7 @@ Aplicación web para traducir automáticamente las sinopsis de tu servidor Plex 
 Conecta con tu instancia de Plex, detecta los medios cuya sinopsis no está en español y los traduce usando el proveedor de IA que elijas. Las traducciones se pueden revisar antes de escribirlas de vuelta en Plex.
 
 El flujo de trabajo es:
+
 1. **Buscar** — recupera los medios de Plex según los filtros aplicados
 2. **Traducir** — envía las sinopsis seleccionadas al proveedor de IA
 3. **Procesar** — escribe las traducciones aprobadas de vuelta en Plex
@@ -37,20 +38,20 @@ El flujo de trabajo es:
 
 ## Capturas de pantalla
 
-| Login | Medios | Ajustes |
-|-------|--------|---------|
+| Login                                | Medios                                | Ajustes                                   |
+| ------------------------------------ | ------------------------------------- | ----------------------------------------- |
 | ![Login](docs/screenshots/login.png) | ![Medios](docs/screenshots/media.png) | ![Ajustes](docs/screenshots/settings.png) |
 
 ---
 
 ## Stack
 
-| Capa | Tecnología |
-|------|-----------|
-| Backend | Python 3.12 · FastAPI · SQLite · plexapi |
-| Frontend | Next.js 16 · Tailwind CSS v4 · shadcn/ui · TanStack Table |
-| IA | OpenAI SDK · Ollama · deep-translator |
-| Despliegue | Docker · Docker Compose |
+| Capa       | Tecnología                                                |
+| ---------- | --------------------------------------------------------- |
+| Backend    | Python 3.12 · FastAPI · SQLite · plexapi                  |
+| Frontend   | Next.js 16 · Tailwind CSS v4 · shadcn/ui · TanStack Table |
+| IA         | OpenAI SDK · Ollama · deep-translator                     |
+| Despliegue | Docker · Docker Compose                                   |
 
 ---
 
@@ -88,6 +89,7 @@ docker-compose -f docker-compose_local.yml up --build -d
 ```
 
 Esto levanta un único contenedor `plex-trans` que expone ambos puertos:
+
 - Puerto `8000` — API (backend FastAPI)
 - Puerto `3000` — Interfaz web (frontend Next.js)
 
@@ -135,6 +137,7 @@ Al acceder por primera vez la app detecta que no hay usuarios y muestra el formu
 ### Ajustes de Plex
 
 Ve a **Ajustes** e introduce:
+
 - **Plex IP** — IP o hostname de tu servidor Plex
 - **Plex Puerto** — por defecto `32400`
 - **Plex Token** — token de autenticación de Plex (búscalo en las herramientas de red del navegador mientras usas Plex Web, cabecera `X-Plex-Token`)
@@ -145,11 +148,11 @@ Selecciona las **bibliotecas** que quieres incluir en las búsquedas.
 
 Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres proveedores:
 
-| Proveedor | Requisitos | Notas |
-|-----------|-----------|-------|
-| **OpenAI** | URL base + API Key + modelo | Compatible con cualquier API OpenAI-compatible (LM Studio, OpenRouter, etc.) |
-| **Ollama** | URL de la instancia + modelo | Modelos locales, sin coste externo |
-| **Deep Translator** | Ninguno | Google Translate gratuito, menor calidad |
+| Proveedor           | Requisitos                   | Notas                                                                        |
+| ------------------- | ---------------------------- | ---------------------------------------------------------------------------- |
+| **OpenAI**          | URL base + API Key + modelo  | Compatible con cualquier API OpenAI-compatible (LM Studio, OpenRouter, etc.) |
+| **Ollama**          | URL de la instancia + modelo | Modelos locales, sin coste externo                                           |
+| **Deep Translator** | Ninguno                      | Google Translate gratuito, menor calidad                                     |
 
 ---
 
@@ -157,18 +160,18 @@ Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres provee
 
 ### Backend
 
-| Variable | Por defecto | Descripción |
-|----------|-------------|-------------|
-| `JWT_SECRET` | _(requerido)_ | Clave para firmar los tokens JWT |
-| `APP_DB_PATH` | `/data/app.db` | Ruta de la base de datos SQLite |
-| `JWT_EXPIRES_MINUTES` | `10080` (7 días) | Duración del token |
-| `CORS_ORIGINS` | `http://localhost:3000` | Orígenes CORS permitidos |
-| `MEDIA_CACHE_TTL_SEC` | `300` | TTL de la caché de medios en memoria |
+| Variable              | Por defecto             | Descripción                          |
+| --------------------- | ----------------------- | ------------------------------------ |
+| `JWT_SECRET`          | _(requerido)_           | Clave para firmar los tokens JWT     |
+| `APP_DB_PATH`         | `/data/app.db`          | Ruta de la base de datos SQLite      |
+| `JWT_EXPIRES_MINUTES` | `10080` (7 días)        | Duración del token                   |
+| `CORS_ORIGINS`        | `http://localhost:3000` | Orígenes CORS permitidos             |
+| `MEDIA_CACHE_TTL_SEC` | `300`                   | TTL de la caché de medios en memoria |
 
 ### Frontend
 
-| Variable | Por defecto | Descripción |
-|----------|-------------|-------------|
+| Variable       | Por defecto             | Descripción     |
+| -------------- | ----------------------- | --------------- |
 | `API_BASE_URL` | `http://localhost:8000` | URL del backend |
 
 ---
@@ -180,13 +183,14 @@ Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres provee
 Conecta por SSH a tu servidor Unraid y ejecuta el siguiente comando para descargar la plantilla directamente:
 
 ```bash
-curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans.xml \
-  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans.xml
+curl -o /boot/config/plugins/dockerMan/templates-user/my-plex-trans.xml \
+  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/my-plex-trans.xml
 ```
 
 Después ve a **Docker → Add Container** y la plantilla aparecerá en el desplegable de **Plantillas de usuario**.
 
 Recuerda ajustar en la plantilla:
+
 - `API_BASE_URL` por la IP y puerto del API (ej: `http://192.168.1.100:8000`)
 - `JWT_SECRET` por una cadena segura
 - `CORS_ORIGINS` por la URL de tu frontend (ej: `http://192.168.1.100:3000`) o `*`
