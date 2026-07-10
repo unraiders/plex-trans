@@ -669,33 +669,63 @@ _NOMBRES_IDIOMA = {
     "id": "Indonesio",
 }
 
-# Confianza mínima para aceptar una detección. Por debajo (texto muy corto o
-# demasiado ambiguo) devolvemos "desconocido" en lugar de arriesgar una etiqueta
-# equivocada. Los "desconocido" se siguen ofreciendo para traducir, así que no
-# se pierde ningún elemento.
+# Confianza mínima para aceptar la detección local (fastText) de respaldo. Por
+# debajo devolvemos "desconocido" en vez de arriesgar una etiqueta equivocada.
 _UMBRAL_CONFIANZA_IDIOMA = 0.35
+
+# Endpoint público de Google Translate. Su detección es, con diferencia, la más
+# fiable con sinopsis españolas plagadas de nombres propios extranjeros (actores,
+# personajes, lugares), que rompen a todos los detectores estadísticos.
+_GOOGLE_DETECT_URL = "https://translate.googleapis.com/translate_a/single"
+
+
+def _detectar_google(contenido: str) -> Optional[str]:
+    """Detecta el idioma vía Google Translate. Devuelve el código ISO o None."""
+    params = {
+        "client": "gtx",
+        "sl": "auto",
+        "tl": "en",
+        "dt": "t",
+        "q": contenido[:2000],
+    }
+    r = requests.get(_GOOGLE_DETECT_URL, params=params, timeout=8)
+    r.raise_for_status()
+    data = r.json()
+    code = data[2] if isinstance(data, list) and len(data) > 2 else None
+    if not code:
+        return None
+    return str(code).split("-")[0].strip().lower() or None
+
+
+def _detectar_fasttext(contenido: str) -> Tuple[str, str]:
+    """Respaldo local (fastText grande) para cuando Google no está disponible.
+    El modelo se pre-descarga en el build de la imagen (ver Dockerfile)."""
+    resultados = detect(contenido, model="full", k=1)
+    if not resultados:
+        return "desconocido", ""
+    mejor = resultados[0]
+    if float(mejor.get("score", 0.0)) < _UMBRAL_CONFIANZA_IDIOMA:
+        return "desconocido", ""
+    codigo = str(mejor.get("lang", "")).lower()
+    if not codigo:
+        return "desconocido", ""
+    return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
 
 
 def detectar_idioma_texto(texto: str) -> Tuple[str, str]:
+    contenido = " ".join((texto or "").split()).strip()
+    if not contenido:
+        return "desconocido", ""
+    # 1) Google (principal): robusto ante nombres propios extranjeros.
     try:
-        contenido = " ".join((texto or "").split()).strip()
-        if not contenido:
-            return "desconocido", ""
-        # model="full": modelo fastText grande (lid.176.bin). Es mucho más fiable
-        # que las alternativas con sinopsis reales cargadas de nombres propios
-        # extranjeros (actores, personajes, lugares) que hacían fallar a langdetect,
-        # al modelo "lite" y a lingua. El modelo se pre-descarga en el build de la
-        # imagen (ver Dockerfile), así que en runtime no hay ninguna descarga.
-        resultados = detect(contenido, model="full", k=1)
-        if not resultados:
-            return "desconocido", ""
-        mejor = resultados[0]
-        if float(mejor.get("score", 0.0)) < _UMBRAL_CONFIANZA_IDIOMA:
-            return "desconocido", ""
-        codigo = str(mejor.get("lang", "")).lower()
-        if not codigo:
-            return "desconocido", ""
-        return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
+        codigo = _detectar_google(contenido)
+        if codigo:
+            return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
+    except Exception:
+        pass
+    # 2) Respaldo local (fastText) si Google falla, va lento o limita peticiones.
+    try:
+        return _detectar_fasttext(contenido)
     except Exception:
         return "desconocido", ""
 

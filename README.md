@@ -26,7 +26,7 @@ El flujo de trabajo es:
 - Gestión de perfiles de IA: crea varios perfiles y cambia entre ellos desde Ajustes
 - **Modo offline** — importa todos los medios no-español a una caché SQLite local; las búsquedas son instantáneas sin conectar con Plex en cada sesión
 - Traducciones persistentes en modo offline: las sinopsis ya procesadas se guardan en la caché y se muestran automáticamente en futuras sesiones
-- Detección automática de idioma con fastText (`fast-langdetect`, modelo grande `lid.176`), fiable incluso con sinopsis llenas de nombres propios extranjeros que despistan a otros detectores
+- Detección automática de idioma con **Google Translate** (la más fiable con sinopsis españolas llenas de nombres propios extranjeros), con respaldo local fastText (`fast-langdetect`) si Google no está disponible
 - Botón "Copiar sinopsis" en cada fila para volcar la sinopsis original en el campo de traducción con un clic
 - Filtro "Solo no español" para mostrar únicamente los candidatos a traducir
 - Caché de páginas en sesión para navegación rápida sin repetir búsquedas
@@ -51,7 +51,7 @@ El flujo de trabajo es:
 | ---------- | --------------------------------------------------------- |
 | Backend    | Python 3.12 · FastAPI · SQLite · plexapi                  |
 | Frontend   | Next.js 16 · Tailwind CSS v4 · shadcn/ui · TanStack Table |
-| IA         | OpenAI SDK · Ollama · deep-translator · fast-langdetect   |
+| IA         | OpenAI SDK · Ollama · deep-translator · Google Translate (detección) · fast-langdetect |
 | Despliegue | Docker · Docker Compose                                   |
 
 ---
