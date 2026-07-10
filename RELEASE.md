@@ -7,6 +7,5 @@
 
 ## 🔧 Mejoras
 
-- Reemplazado `langdetect` por **`fast-langdetect`** (modelo fastText `lid.176`), mucho más preciso con textos cortos y capaz de distinguir español de catalán de una sola pasada.
+- Reemplazado `langdetect` por **[lingua](https://github.com/pemistahl/lingua-py)**, mucho más fiable: acierta el español incluso en sinopsis largas plagadas de nombres propios extranjeros (actores, personajes, lugares) que antes hacían fallar la detección, y distingue español de catalán de una sola pasada.
 - Eliminada toda la heurística de "rescate" basada en listas de palabras; la detección es ahora directa y aplica un único umbral de confianza (por debajo se marca "desconocido", que sigue ofreciéndose para traducir).
-- El modelo comprimido (~1 MB) va incluido en el paquete: **sin descargas en tiempo de ejecución** y con impacto mínimo en el tamaño de la imagen Docker.

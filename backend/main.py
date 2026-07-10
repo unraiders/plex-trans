@@ -16,7 +16,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from fast_langdetect import detect
+from lingua import Language, LanguageDetectorBuilder
 from openai import OpenAI
 import bcrypt
 from plexapi.exceptions import Unauthorized
@@ -669,11 +669,29 @@ _NOMBRES_IDIOMA = {
     "id": "Indonesio",
 }
 
-# Confianza mínima para aceptar una detección. Por debajo (texto muy corto,
-# mezcla de idiomas o nombres propios que despistan) devolvemos "desconocido"
-# en lugar de arriesgar una etiqueta equivocada. Los "desconocido" se siguen
-# ofreciendo para traducir, así que no se pierde ningún elemento.
-_UMBRAL_CONFIANZA_IDIOMA = 0.35
+# Idiomas candidatos: restringir el detector al conjunto realista de idiomas
+# de las sinopsis mejora la precisión, sobre todo con textos cortos.
+_LINGUA_IDIOMAS = [
+    Language.SPANISH,
+    Language.CATALAN,
+    Language.ITALIAN,
+    Language.PORTUGUESE,
+    Language.ENGLISH,
+    Language.FRENCH,
+    Language.GERMAN,
+    Language.BASQUE,
+    Language.DUTCH,
+    Language.ROMANIAN,
+    Language.INDONESIAN,
+]
+
+# Confianza mínima para aceptar una detección. Por debajo (texto muy corto o
+# demasiado ambiguo) devolvemos "desconocido" en lugar de arriesgar una etiqueta
+# equivocada. Los "desconocido" se siguen ofreciendo para traducir, así que no
+# se pierde ningún elemento.
+_UMBRAL_CONFIANZA_IDIOMA = 0.30
+
+_lingua_detector = LanguageDetectorBuilder.from_languages(*_LINGUA_IDIOMAS).build()
 
 
 def detectar_idioma_texto(texto: str) -> Tuple[str, str]:
@@ -681,17 +699,13 @@ def detectar_idioma_texto(texto: str) -> Tuple[str, str]:
         contenido = " ".join((texto or "").split()).strip()
         if not contenido:
             return "desconocido", ""
-        # model="lite": modelo fastText comprimido incluido en el paquete
-        # (~1 MB), sin descargas en tiempo de ejecución.
-        resultados = detect(contenido, model="lite", k=1)
-        if not resultados:
+        confianzas = _lingua_detector.compute_language_confidence_values(contenido)
+        if not confianzas:
             return "desconocido", ""
-        mejor = resultados[0]
-        if float(mejor.get("score", 0.0)) < _UMBRAL_CONFIANZA_IDIOMA:
+        mejor = confianzas[0]
+        if mejor.value < _UMBRAL_CONFIANZA_IDIOMA:
             return "desconocido", ""
-        codigo = str(mejor.get("lang", "")).lower()
-        if not codigo:
-            return "desconocido", ""
+        codigo = mejor.language.iso_code_639_1.name.lower()
         return _NOMBRES_IDIOMA.get(codigo, codigo), codigo
     except Exception:
         return "desconocido", ""
