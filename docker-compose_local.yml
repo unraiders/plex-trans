@@ -1,29 +1,16 @@
 services:
-  backend:
-    container_name: plex-trans-backend
+  plex-trans:
+    container_name: plex-trans
     build:
       context: .
       dockerfile: Dockerfile
-      target: backend
     environment:
       APP_DB_PATH: /data/app.db
       JWT_SECRET: ${JWT_SECRET:-cambia-esto-por-un-secreto}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
     volumes:
       - ./data:/data
     ports:
       - "8000:8000"
-
-  frontend:
-    container_name: plex-trans-frontend
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: frontend
-    environment:
-      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000}
-    ports:
       - "3000:3000"
-    depends_on:
-      - backend
-

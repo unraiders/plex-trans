@@ -73,15 +73,25 @@ CORS_ORIGINS=http://tu-servidor-ip:3000
 API_BASE_URL=http://tu-servidor-ip:8000
 ```
 
-### 3. Construir y levantar los contenedores
+### 3. Levantar el contenedor
+
+Con la imagen publicada (disponible en Docker Hub `unraiders/plex-trans` y en GHCR `ghcr.io/unraiders/plex-trans`, multiarch `amd64` / `arm64` / `arm/v7`):
 
 ```bash
-docker-compose up --build -d
+docker-compose up -d
 ```
 
-Esto levanta dos contenedores:
-- `plex-trans-backend` — API en el puerto `8000`
-- `plex-trans-frontend` — Interfaz web en el puerto `3000`
+O construyendo la imagen en local:
+
+```bash
+docker-compose -f docker-compose_local.yml up --build -d
+```
+
+Esto levanta un único contenedor `plex-trans` que expone ambos puertos:
+- Puerto `8000` — API (backend FastAPI)
+- Puerto `3000` — Interfaz web (frontend Next.js)
+
+El navegador accede al frontend por el puerto `3000`, y este realiza las llamadas al API por el puerto `8000`, por lo que ambos puertos deben ser accesibles desde tu red.
 
 Accede a la app en `http://tu-servidor-ip:3000`
 
@@ -165,23 +175,21 @@ Desde **Ajustes** crea un perfil de traducción eligiendo uno de los tres provee
 
 ## Instalación en Unraid
 
-### Opción 1 — Plantillas via SSH (recomendado)
+### Opción 1 — Plantilla via SSH (recomendado)
 
-Conecta por SSH a tu servidor Unraid y ejecuta los siguientes comandos para descargar las plantillas directamente:
+Conecta por SSH a tu servidor Unraid y ejecuta el siguiente comando para descargar la plantilla directamente:
 
 ```bash
-curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans-backend.xml \
-  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-backend.xml
-
-curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans-frontend.xml \
-  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans-frontend.xml
+curl -o /boot/config/plugins/dockerMan/templates-user/plex-trans.xml \
+  https://raw.githubusercontent.com/unraiders/plex-trans/main/unraid/plex-trans.xml
 ```
 
-Después ve a **Docker → Add Container** y las plantillas aparecerán en el desplegable de **Plantillas de usuario**.
+Después ve a **Docker → Add Container** y la plantilla aparecerá en el desplegable de **Plantillas de usuario**.
 
-Recuerda ajustar en cada plantilla:
-- **Backend:** `JWT_SECRET` por una cadena segura y `CORS_ORIGINS` por la URL de tu frontend
-- **Frontend:** `API_BASE_URL` por la IP y puerto de tu backend (ej: `http://192.168.1.100:8000`)
+Recuerda ajustar en la plantilla:
+- `API_BASE_URL` por la IP y puerto del API (ej: `http://192.168.1.100:8000`)
+- `JWT_SECRET` por una cadena segura
+- `CORS_ORIGINS` por la URL de tu frontend (ej: `http://192.168.1.100:3000`) o `*`
 
 ---
 
