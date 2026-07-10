@@ -325,8 +325,12 @@ export default function MediaPage() {
         return
       }
     } catch {}
+    // Al restaurar la vista anterior, forzar datos frescos del servidor (no la
+    // caché de sesión) para que se reflejen los últimos cambios: importaciones,
+    // ítems procesados que ahora se excluyen, etc. En modo offline es una lectura
+    // local instantánea.
     const saved = readLastSearch()
-    if (saved) fetchPage(saved.page || 1)
+    if (saved) fetchPage(saved.page || 1, undefined, false, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 

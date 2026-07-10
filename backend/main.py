@@ -102,6 +102,19 @@ def db_init() -> None:
             )
             """
         )
+        # Registro persistente de los medios ya procesados (escritos en Plex).
+        # Se usa para excluirlos de futuras importaciones aunque la detección de
+        # idioma vuelva a fallar en ellos.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS processed_items (
+                rating_key TEXT PRIMARY KEY,
+                title TEXT DEFAULT '',
+                translation TEXT DEFAULT '',
+                updated_at TEXT
+            )
+            """
+        )
         cache_cols = {
             r["name"] for r in conn.execute("PRAGMA table_info(media_cache)").fetchall()
         }
@@ -1458,6 +1471,13 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
         "running": True, "library": "", "phase": "",
         "processed": 0, "found": 0, "current": "",
     })
+    # Ítems ya procesados por el usuario: se excluyen de la importación aunque la
+    # detección de idioma vuelva a fallar en ellos (ya los dio por buenos).
+    with db_conn() as conn:
+        procesados = {
+            r["rating_key"]
+            for r in conn.execute("SELECT rating_key FROM processed_items").fetchall()
+        }
     all_items: List[MediaItem] = []
     seen: set = set()
 
@@ -1480,7 +1500,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                 if es_idioma_espanol(lang_name, lang_code):
                     continue
                 rk = str(getattr(m, "ratingKey", ""))
-                if not rk or rk in seen:
+                if not rk or rk in seen or rk in procesados:
                     continue
                 all_items.append(MediaItem(
                     ratingKey=rk,
@@ -1502,7 +1522,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                     lang_name, lang_code = _detectar_local(summary)
                     if not es_idioma_espanol(lang_name, lang_code):
                         rk = str(getattr(sh, "ratingKey", ""))
-                        if rk and rk not in seen:
+                        if rk and rk not in seen and rk not in procesados:
                             all_items.append(MediaItem(
                                 ratingKey=rk,
                                 type=str(getattr(sh, "type", "show")),
@@ -1524,7 +1544,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(se, "ratingKey", ""))
-                        if not rk or rk in seen:
+                        if not rk or rk in seen or rk in procesados:
                             continue
                         all_items.append(MediaItem(
                             ratingKey=rk,
@@ -1549,7 +1569,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(ep, "ratingKey", ""))
-                        if not rk or rk in seen:
+                        if not rk or rk in seen or rk in procesados:
                             continue
                         all_items.append(MediaItem(
                             ratingKey=rk,
@@ -1679,6 +1699,7 @@ def media_process(
     updated = 0
     errors = 0
     processed_translations: Dict[str, str] = {}
+    processed_titles: Dict[str, str] = {}
     for item in payload.items:
         try:
             translation = (item.translation or "").strip()
@@ -1688,6 +1709,7 @@ def media_process(
             actualizar_sinopsis_plex(plex, video, translation, bloquear=True)
             updated += 1
             processed_translations[item.ratingKey] = translation
+            processed_titles[item.ratingKey] = str(getattr(video, "title", "") or "")
         except Exception:
             errors += 1
     _media_cache_clear()
@@ -1703,5 +1725,17 @@ def media_process(
                     WHERE rating_key = ?
                     """,
                     (tr, tr, now, rk),
+                )
+                # Registro persistente para excluirlo de futuras importaciones.
+                conn.execute(
+                    """
+                    INSERT INTO processed_items (rating_key, title, translation, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(rating_key) DO UPDATE SET
+                        title = excluded.title,
+                        translation = excluded.translation,
+                        updated_at = excluded.updated_at
+                    """,
+                    (rk, processed_titles.get(rk, ""), tr, now),
                 )
     return ProcessResult(updated=updated, errors=errors)
