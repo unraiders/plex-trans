@@ -906,6 +906,9 @@ class MediaListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    # Nº de medios ya procesados que siguen en la caché offline (con traducción).
+    # Permite habilitar el botón "Eliminar de la tabla los ya procesados".
+    processed_in_cache: int = 0
 
 
 class ImportResult(BaseModel):
@@ -1165,6 +1168,10 @@ def media_list(
         with db_conn() as conn:
             rows = conn.execute("SELECT * FROM media_cache").fetchall()
             raw_rows = [dict(r) for r in rows]
+        # Procesados que siguen en la caché (tienen traducción guardada).
+        procesados_en_cache = sum(
+            1 for r in raw_rows if (r.get("translation") or "").strip()
+        )
         all_items: List[MediaItem] = []
         for r in raw_rows:
             if lib_filter and r["library"] != lib_filter:
@@ -1186,7 +1193,10 @@ def media_list(
         total = len(all_items)
         start = (page - 1) * page_size
         end = start + page_size
-        return MediaListResponse(items=all_items[start:end], total=total, page=page, page_size=page_size)
+        return MediaListResponse(
+            items=all_items[start:end], total=total, page=page,
+            page_size=page_size, processed_in_cache=procesados_en_cache,
+        )
 
     plex = _plex_connect(settings)
 
@@ -1650,6 +1660,20 @@ def media_cache_stats(_user=Depends(get_current_user)) -> MediaCacheStats:
         ).fetchall()
         by_library = {r["library"]: r["cnt"] for r in rows}
     return MediaCacheStats(total=sum(by_library.values()), by_library=by_library)
+
+
+@app.post("/media/cache/processed/clear")
+def media_cache_clear_processed(_user=Depends(get_current_user)) -> Dict[str, int]:
+    """Elimina de la caché offline los medios ya procesados (con traducción), sin
+    tener que re-importar. Siguen registrados en processed_items, así que no
+    volverán a aparecer en futuras importaciones."""
+    with db_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM media_cache WHERE translation IS NOT NULL AND translation != ''"
+        )
+        deleted = cur.rowcount if cur.rowcount is not None else 0
+    _media_cache_clear()
+    return {"deleted": int(deleted)}
 
 
 @app.post("/media/translate", response_model=List[TranslationOut])
