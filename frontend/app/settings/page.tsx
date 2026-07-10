@@ -55,6 +55,16 @@ type PlexLibrary = {
   episodes?: number
 }
 
+type ImportProgress = {
+  running: boolean
+  library: string
+  phase: string
+  processed: number
+  found: number
+  total: number
+  current: string
+}
+
 export default function SettingsPage() {
   const ready = useAuth()
   const [loading, setLoading] = useState(true)
@@ -80,8 +90,10 @@ export default function SettingsPage() {
   const [importing, setImporting] = useState(false)
   const [importElapsed, setImportElapsed] = useState(0)
   const [importDuration, setImportDuration] = useState<string | null>(null)
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null)
   const importAbortRef = useRef<AbortController | null>(null)
   const importTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const importPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const importElapsedRef = useRef(0)
 
   const plexTokenHint = useMemo(() => {
@@ -236,12 +248,19 @@ export default function SettingsPage() {
     setImportElapsed(0)
     importElapsedRef.current = 0
     setImportDuration(null)
+    setImportProgress(null)
     setError('')
     setOk('')
     importTimerRef.current = setInterval(() => {
       importElapsedRef.current += 1
       setImportElapsed(importElapsedRef.current)
     }, 1000)
+    importPollRef.current = setInterval(async () => {
+      try {
+        const p = await apiFetch<ImportProgress>('/media/import/progress')
+        setImportProgress(p)
+      } catch {}
+    }, 1200)
     try {
       const res = await apiFetch<{ imported: number; by_library: Record<string, number> }>('/media/import', {
         method: 'POST',
@@ -272,8 +291,13 @@ export default function SettingsPage() {
         clearInterval(importTimerRef.current)
         importTimerRef.current = null
       }
+      if (importPollRef.current) {
+        clearInterval(importPollRef.current)
+        importPollRef.current = null
+      }
       importElapsedRef.current = 0
       setImportElapsed(0)
+      setImportProgress(null)
       setImporting(false)
     }
   }
@@ -491,6 +515,50 @@ export default function SettingsPage() {
                 </Button>
               )}
             </div>
+            {importing && importProgress && (
+              <div className="w-full space-y-2 rounded-md border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900/30">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                    {importProgress.phase === 'Verificando con Google'
+                      ? 'Fase 2 · Verificando con Google'
+                      : `Fase 1 · Analizando en local${
+                          importProgress.library ? ' · ' + importProgress.library : ''
+                        }${importProgress.phase ? ' · ' + importProgress.phase : ''}`}
+                  </span>
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {importProgress.total > 0
+                      ? `${importProgress.processed}/${importProgress.total}`
+                      : `${importProgress.processed} analizados`}
+                  </span>
+                  <span className="rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-semibold text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                    {importProgress.total > 0
+                      ? `${importProgress.found} confirmados`
+                      : `${importProgress.found} posibles`}
+                  </span>
+                </div>
+                {importProgress.total > 0 && (
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <div
+                      className="h-full bg-yellow-500 transition-all dark:bg-yellow-400"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.round(
+                            (100 * importProgress.processed) /
+                              Math.max(1, importProgress.total)
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                )}
+                {importProgress.current && (
+                  <div className="truncate text-zinc-500 dark:text-zinc-400">
+                    {importProgress.current}
+                  </div>
+                )}
+              </div>
+            )}
             {importing && (
               <Alert className="border-yellow-400 bg-yellow-50 text-yellow-800 dark:border-yellow-600 dark:bg-yellow-900/20 dark:text-yellow-300 text-center whitespace-nowrap w-fit mx-auto">
                 <TriangleAlert className="h-4 w-4 text-yellow-600 dark:text-yellow-400" />

@@ -40,6 +40,13 @@ RUN apt-get update \
 # Backend
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
+
+# Detección de idioma: pre-descargar el modelo fastText grande (lid.176.bin, ~126 MB)
+# durante el build y dejarlo en una ruta fija. Así en runtime no hay ninguna
+# descarga y funciona sin acceso a internet.
+ENV FTLANG_CACHE=/app/.ftlang_cache
+RUN python -c "from fast_langdetect import detect; detect('hola mundo', model='full')"
+
 COPY backend /app/backend
 
 # Frontend (Next.js standalone) en /app/web

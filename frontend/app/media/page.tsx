@@ -9,7 +9,7 @@ import {
   useReactTable,
   RowSelectionState,
 } from '@tanstack/react-table'
-import { X } from 'lucide-react'
+import { ArrowRight, X } from 'lucide-react'
 
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
@@ -245,27 +245,55 @@ export default function MediaPage() {
         cell: ({ row }) => {
           const it = row.original as MediaItem
           const k = String(it.ratingKey)
+          const done = !!processed[k]
           return (
-            <Textarea
-              value={it.translation || ''}
-              onChange={(e) => {
-                const v = e.target.value
-                setTranslations((prev) => {
-                  const next = { ...prev }
-                  if (!String(v || '').trim()) delete next[k]
-                  else next[k] = v
-                  return next
-                })
-                setItems((prev) =>
-                  prev.map((x) =>
-                    String(x.ratingKey) === k ? { ...x, translation: v } : x
+            <div className="flex items-stretch gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-auto w-8 shrink-0 self-stretch p-0"
+                disabled={done || !String(it.summary || '').trim()}
+                title="Copiar la sinopsis en la traducción"
+                onClick={() => {
+                  const v = it.summary || ''
+                  setTranslations((prev) => {
+                    const next = { ...prev }
+                    if (!String(v).trim()) delete next[k]
+                    else next[k] = v
+                    return next
+                  })
+                  setItems((prev) =>
+                    prev.map((x) =>
+                      String(x.ratingKey) === k ? { ...x, translation: v } : x
+                    )
                   )
-                )
-                setRowSelection((prev) => ({ ...prev, [k]: false }))
-              }}
-              placeholder="Traducción aparecerá aquí tras pulsar Traducir"
-              className="min-h-[104px]"
-            />
+                  // Seleccionar la fila para poder procesarla directamente.
+                  if (!done) setRowSelection((prev) => ({ ...prev, [k]: true }))
+                }}
+              >
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Textarea
+                value={it.translation || ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setTranslations((prev) => {
+                    const next = { ...prev }
+                    if (!String(v || '').trim()) delete next[k]
+                    else next[k] = v
+                    return next
+                  })
+                  setItems((prev) =>
+                    prev.map((x) =>
+                      String(x.ratingKey) === k ? { ...x, translation: v } : x
+                    )
+                  )
+                  setRowSelection((prev) => ({ ...prev, [k]: false }))
+                }}
+                placeholder="Traducción aparecerá aquí tras pulsar Traducir"
+                className="min-h-[104px] flex-1 min-w-0"
+              />
+            </div>
           )
         },
       },
