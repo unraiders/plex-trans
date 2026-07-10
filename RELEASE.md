@@ -1,5 +1,11 @@
 # Cambios en esta versión
 
-## 🚀 Cambiado el nombre del fichero de la plantilla de Unraid
+## 🐞 Correcciones
 
-- Añadido el my- para que Unraid reconozca la plantilla.
+- Corregida la detección de idioma de las sinopsis: muchas descripciones en español (sobre todo cortas) se clasificaban erróneamente como italiano, catalán, indonesio o "desconocido" y quedaban marcadas como no-español.
+
+## 🔧 Mejoras
+
+- Reemplazado `langdetect` por **`fast-langdetect`** (modelo fastText `lid.176`), mucho más preciso con textos cortos y capaz de distinguir español de catalán de una sola pasada.
+- Eliminada toda la heurística de "rescate" basada en listas de palabras; la detección es ahora directa y aplica un único umbral de confianza (por debajo se marca "desconocido", que sigue ofreciéndose para traducir).
+- El modelo comprimido (~1 MB) va incluido en el paquete: **sin descargas en tiempo de ejecución** y con impacto mínimo en el tamaño de la imagen Docker.
