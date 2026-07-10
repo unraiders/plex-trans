@@ -208,6 +208,9 @@ export default function HelpPage() {
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 Una vez revisadas las traducciones, pulsa <span className="font-medium text-zinc-700 dark:text-zinc-300">Procesar</span> para escribirlas de vuelta en Plex. Este paso sí modifica la sinopsis en tu servidor Plex. Solo se procesan los elementos seleccionados que tengan traducción disponible. Al finalizar se muestra un resumen con los elementos actualizados y los errores, si los hubiera.
               </p>
+              <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                Los medios que procesas quedan registrados de forma permanente y <span className="font-medium text-zinc-700 dark:text-zinc-300">no volverán a aparecer en futuras importaciones</span>, aunque la detección de idioma vuelva a fallar en ellos. Es útil para las sinopsis que ya están en español pero que el detector marca por error: las das por buenas (por ejemplo con el botón de copiar la sinopsis) y al procesarlas dejan de molestar.
+              </p>
             </div>
 
           </div>

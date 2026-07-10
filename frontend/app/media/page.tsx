@@ -67,6 +67,7 @@ type MediaListResponse = {
   total: number
   page: number
   page_size: number
+  processed_in_cache?: number
 }
 
 type TranslateResponseItem = { ratingKey: string | number; translation: string }
@@ -98,6 +99,8 @@ export default function MediaPage() {
   })
   const [page, setPage] = useState(() => readLastSearch()?.page || 1)
   const [total, setTotal] = useState(0)
+  const [processedInCache, setProcessedInCache] = useState(0)
+  const [clearingProcessed, setClearingProcessed] = useState(false)
   const [nonSpanishOnly, setNonSpanishOnly] = useState(() => readLastSearch()?.nonSpanishOnly ?? true)
 
   const [items, setItems] = useState<MediaItem[]>([])
@@ -325,8 +328,12 @@ export default function MediaPage() {
         return
       }
     } catch {}
+    // Al restaurar la vista anterior, forzar datos frescos del servidor (no la
+    // caché de sesión) para que se reflejen los últimos cambios: importaciones,
+    // ítems procesados que ahora se excluyen, etc. En modo offline es una lectura
+    // local instantánea.
     const saved = readLastSearch()
-    if (saved) fetchPage(saved.page || 1)
+    if (saved) fetchPage(saved.page || 1, undefined, false, true)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -446,6 +453,7 @@ export default function MediaPage() {
       }))
       setItems(normalized)
       setTotal(Number(data.total || 0))
+      setProcessedInCache(Number(data.processed_in_cache || 0))
       setPage(Number(data.page || nextPage))
       setOk(`Cargados: ${normalized.length}`)
       try { sessionStorage.setItem('plex_last_search', JSON.stringify({ search: search.trim(), library: library.trim(), limit, nonSpanishOnly, page: nextPage })) } catch {}
@@ -554,12 +562,34 @@ export default function MediaPage() {
         }
         return next
       })
+      setProcessedInCache((n) => n + (res.updated || 0))
       setOk(`Actualizados: ${res.updated} | Errores: ${res.errors}`)
       toast.info(`Proceso completado`, { description: `${res.updated} actualizado(s) · ${res.errors} error(es)` })
     } catch (e: any) {
       setError(e?.message || 'Error')
     } finally {
       setProcessing(false)
+    }
+  }
+
+  async function eliminarProcesados() {
+    setError('')
+    setOk('')
+    setClearingProcessed(true)
+    try {
+      const res = await apiFetch<{ deleted: number }>('/media/cache/processed/clear', {
+        method: 'POST',
+      })
+      toast.info('Procesados eliminados de la tabla', {
+        description: `${res.deleted} elemento(s) eliminados`,
+      })
+      setProcessedInCache(0)
+      setPageCache({})
+      await fetchPage(1, undefined, false, true)
+    } catch (e: any) {
+      setError(e?.message || 'Error')
+    } finally {
+      setClearingProcessed(false)
     }
   }
 
@@ -681,6 +711,19 @@ export default function MediaPage() {
                 variant="secondary"
               >
                 {processing ? 'Procesando...' : 'Procesar'}
+              </Button>
+              <Button
+                onClick={eliminarProcesados}
+                disabled={loading || translating || processing || clearingProcessed || processedInCache === 0}
+                type="button"
+                variant="secondary"
+                title="Quita de la tabla los medios ya procesados, sin tener que re-importar"
+              >
+                {clearingProcessed
+                  ? 'Eliminando...'
+                  : `Eliminar de la tabla los ya procesados${
+                      processedInCache > 0 ? ` (${processedInCache})` : ''
+                    }`}
               </Button>
             </div>
             {!!aiProfileLabel && (

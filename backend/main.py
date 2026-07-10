@@ -102,6 +102,19 @@ def db_init() -> None:
             )
             """
         )
+        # Registro persistente de los medios ya procesados (escritos en Plex).
+        # Se usa para excluirlos de futuras importaciones aunque la detección de
+        # idioma vuelva a fallar en ellos.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS processed_items (
+                rating_key TEXT PRIMARY KEY,
+                title TEXT DEFAULT '',
+                translation TEXT DEFAULT '',
+                updated_at TEXT
+            )
+            """
+        )
         cache_cols = {
             r["name"] for r in conn.execute("PRAGMA table_info(media_cache)").fetchall()
         }
@@ -893,6 +906,9 @@ class MediaListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+    # Nº de medios ya procesados que siguen en la caché offline (con traducción).
+    # Permite habilitar el botón "Eliminar de la tabla los ya procesados".
+    processed_in_cache: int = 0
 
 
 class ImportResult(BaseModel):
@@ -1152,6 +1168,10 @@ def media_list(
         with db_conn() as conn:
             rows = conn.execute("SELECT * FROM media_cache").fetchall()
             raw_rows = [dict(r) for r in rows]
+        # Procesados que siguen en la caché (tienen traducción guardada).
+        procesados_en_cache = sum(
+            1 for r in raw_rows if (r.get("translation") or "").strip()
+        )
         all_items: List[MediaItem] = []
         for r in raw_rows:
             if lib_filter and r["library"] != lib_filter:
@@ -1173,7 +1193,10 @@ def media_list(
         total = len(all_items)
         start = (page - 1) * page_size
         end = start + page_size
-        return MediaListResponse(items=all_items[start:end], total=total, page=page, page_size=page_size)
+        return MediaListResponse(
+            items=all_items[start:end], total=total, page=page,
+            page_size=page_size, processed_in_cache=procesados_en_cache,
+        )
 
     plex = _plex_connect(settings)
 
@@ -1458,6 +1481,13 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
         "running": True, "library": "", "phase": "",
         "processed": 0, "found": 0, "current": "",
     })
+    # Ítems ya procesados por el usuario: se excluyen de la importación aunque la
+    # detección de idioma vuelva a fallar en ellos (ya los dio por buenos).
+    with db_conn() as conn:
+        procesados = {
+            r["rating_key"]
+            for r in conn.execute("SELECT rating_key FROM processed_items").fetchall()
+        }
     all_items: List[MediaItem] = []
     seen: set = set()
 
@@ -1480,7 +1510,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                 if es_idioma_espanol(lang_name, lang_code):
                     continue
                 rk = str(getattr(m, "ratingKey", ""))
-                if not rk or rk in seen:
+                if not rk or rk in seen or rk in procesados:
                     continue
                 all_items.append(MediaItem(
                     ratingKey=rk,
@@ -1502,7 +1532,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                     lang_name, lang_code = _detectar_local(summary)
                     if not es_idioma_espanol(lang_name, lang_code):
                         rk = str(getattr(sh, "ratingKey", ""))
-                        if rk and rk not in seen:
+                        if rk and rk not in seen and rk not in procesados:
                             all_items.append(MediaItem(
                                 ratingKey=rk,
                                 type=str(getattr(sh, "type", "show")),
@@ -1524,7 +1554,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(se, "ratingKey", ""))
-                        if not rk or rk in seen:
+                        if not rk or rk in seen or rk in procesados:
                             continue
                         all_items.append(MediaItem(
                             ratingKey=rk,
@@ -1549,7 +1579,7 @@ def media_import(_user=Depends(get_current_user)) -> ImportResult:
                         if es_idioma_espanol(lang_name, lang_code):
                             continue
                         rk = str(getattr(ep, "ratingKey", ""))
-                        if not rk or rk in seen:
+                        if not rk or rk in seen or rk in procesados:
                             continue
                         all_items.append(MediaItem(
                             ratingKey=rk,
@@ -1632,6 +1662,20 @@ def media_cache_stats(_user=Depends(get_current_user)) -> MediaCacheStats:
     return MediaCacheStats(total=sum(by_library.values()), by_library=by_library)
 
 
+@app.post("/media/cache/processed/clear")
+def media_cache_clear_processed(_user=Depends(get_current_user)) -> Dict[str, int]:
+    """Elimina de la caché offline los medios ya procesados (con traducción), sin
+    tener que re-importar. Siguen registrados en processed_items, así que no
+    volverán a aparecer en futuras importaciones."""
+    with db_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM media_cache WHERE translation IS NOT NULL AND translation != ''"
+        )
+        deleted = cur.rowcount if cur.rowcount is not None else 0
+    _media_cache_clear()
+    return {"deleted": int(deleted)}
+
+
 @app.post("/media/translate", response_model=List[TranslationOut])
 def media_translate(
     payload: TranslateRequest, _user=Depends(get_current_user)
@@ -1679,6 +1723,7 @@ def media_process(
     updated = 0
     errors = 0
     processed_translations: Dict[str, str] = {}
+    processed_titles: Dict[str, str] = {}
     for item in payload.items:
         try:
             translation = (item.translation or "").strip()
@@ -1688,6 +1733,7 @@ def media_process(
             actualizar_sinopsis_plex(plex, video, translation, bloquear=True)
             updated += 1
             processed_translations[item.ratingKey] = translation
+            processed_titles[item.ratingKey] = str(getattr(video, "title", "") or "")
         except Exception:
             errors += 1
     _media_cache_clear()
@@ -1703,5 +1749,17 @@ def media_process(
                     WHERE rating_key = ?
                     """,
                     (tr, tr, now, rk),
+                )
+                # Registro persistente para excluirlo de futuras importaciones.
+                conn.execute(
+                    """
+                    INSERT INTO processed_items (rating_key, title, translation, updated_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(rating_key) DO UPDATE SET
+                        title = excluded.title,
+                        translation = excluded.translation,
+                        updated_at = excluded.updated_at
+                    """,
+                    (rk, processed_titles.get(rk, ""), tr, now),
                 )
     return ProcessResult(updated=updated, errors=errors)
