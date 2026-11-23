@@ -43,13 +43,28 @@ export async function apiFetch<T = unknown>(path: string, options: ApiFetchOptio
 
   const baseUrl = await getApiBaseUrl()
 
-  const res = await fetch(`${baseUrl}${path}`, {
-    method: method || 'GET',
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-    cache: 'no-store',
-    signal,
-  })
+  let res: Response
+  try {
+    res = await fetch(`${baseUrl}${path}`, {
+      method: method || 'GET',
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      cache: 'no-store',
+      signal,
+    })
+  } catch (e: any) {
+    // Cancelación explícita (p. ej. botón cancelar importación): se propaga tal cual.
+    if (e?.name === 'AbortError') throw e
+    // "Failed to fetch" / "Load failed" / "NetworkError...": sin respuesta del backend.
+    const err: ApiError = new Error(
+      `No se pudo conectar con el backend (${baseUrl}${path}). ` +
+        'Comprueba que el servidor está en marcha y accesible; si lo está, ' +
+        'revisa sus logs: puede haber fallado sin devolver respuesta.'
+    )
+    err.status = 0
+    err.data = { cause: e?.message || String(e) }
+    throw err
+  }
 
   const text = await res.text()
   let data: unknown = null

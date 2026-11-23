@@ -4,6 +4,7 @@ import re
 import sqlite3
 import threading
 import time
+import traceback
 import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -12,12 +13,13 @@ from uuid import uuid4
 
 import requests
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from fast_langdetect import detect
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 import bcrypt
 from plexapi.exceptions import Unauthorized
 from plexapi.server import PlexServer
@@ -782,15 +784,38 @@ def _translate_openai(texto: str, settings: Dict[str, Any]) -> str:
         "No añadas información nueva, no inventes nombres, y no uses HTML. "
         "Texto a traducir:\n" + texto
     )
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[
+    params: Dict[str, Any] = {
+        "model": model,
+        "messages": [
             {"role": "system", "content": "Eres un traductor profesional al español."},
             {"role": "user", "content": prompt},
         ],
-        temperature=0.2,
-        max_tokens=900,
-    )
+        "temperature": 0.2,
+        "max_tokens": 900,
+    }
+    # Los modelos nuevos de OpenAI rechazan 'max_tokens' (piden
+    # 'max_completion_tokens') y a veces una 'temperature' distinta de la
+    # por defecto. Las APIs compatibles (Ollama, LM Studio...) solo conocen
+    # 'max_tokens'. Se prueba primero lo clásico y se adapta según el error.
+    for _ in range(3):
+        try:
+            resp = client.chat.completions.create(**params)
+            break
+        except BadRequestError as e:
+            body = e.body if isinstance(e.body, dict) else {}
+            err = body.get("error", body) if isinstance(body, dict) else {}
+            param = err.get("param") if isinstance(err, dict) else None
+            msg = str(e)
+            if (param == "max_tokens" or "max_completion_tokens" in msg) and "max_tokens" in params:
+                # Los modelos de razonamiento gastan tokens pensando: margen amplio.
+                params.pop("max_tokens")
+                params["max_completion_tokens"] = 4000
+            elif (param == "temperature" or "temperature" in msg) and "temperature" in params:
+                params.pop("temperature")
+            else:
+                raise
+    else:
+        resp = client.chat.completions.create(**params)
     return (resp.choices[0].message.content or "").strip()
 
 
@@ -845,13 +870,39 @@ def _translate_deep_translator(texto: str) -> str:
     return (GoogleTranslator(source="auto", target="es").translate(texto) or "").strip()
 
 
+def _describe_ai_error(e: Exception) -> str:
+    """Extrae un mensaje legible de los errores de los proveedores de IA."""
+    body = getattr(e, "body", None)
+    if isinstance(body, dict):
+        err = body.get("error", body)
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"])
+        if isinstance(err, str):
+            return err
+    msg = getattr(e, "message", None) or str(e)
+    return msg or type(e).__name__
+
+
 def traducir(texto: str, settings: Dict[str, Any]) -> str:
     proveedor = (settings.get("ia") or "openai").strip().lower()
-    if proveedor == "ollama":
-        return _translate_ollama(texto, settings)
-    if proveedor == "deep_translator":
-        return _translate_deep_translator(texto)
-    return _translate_openai(texto, settings)
+    modelo = (settings.get("ia_modelo") or "").strip()
+    try:
+        if proveedor == "ollama":
+            return _translate_ollama(texto, settings)
+        if proveedor == "deep_translator":
+            return _translate_deep_translator(texto)
+        return _translate_openai(texto, settings)
+    except HTTPException:
+        raise
+    except Exception as e:
+        traceback.print_exc()
+        status = getattr(e, "status_code", None)
+        donde = f"{proveedor}" + (f" · {modelo}" if modelo else "")
+        codigo = f" (HTTP {status})" if status else ""
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error del proveedor de IA [{donde}]{codigo}: {_describe_ai_error(e)}",
+        )
 
 
 def actualizar_sinopsis_plex(
@@ -997,6 +1048,22 @@ def _media_cache_clear() -> None:
 
 
 app = FastAPI(title="Plex Language Backend", version="0.1.0")
+
+
+# Debe registrarse ANTES que CORSMiddleware para quedar por dentro de él:
+# así los errores no controlados salen como JSON con cabeceras CORS y el
+# navegador muestra el mensaje real en lugar de "Failed to fetch".
+@app.middleware("http")
+async def _unhandled_errors_as_json(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Error interno del servidor: {type(e).__name__}: {e}"},
+        )
+
 
 cors_origins = [
     o.strip()
